@@ -6,7 +6,7 @@ export interface PermissionRule {
   tool: string;
   pattern?: string;
   effect: PermissionEffect;
-  source: "cli" | "project" | "user";
+  source?: "cli" | "project" | "user";
 }
 
 export interface BashToolConfig {

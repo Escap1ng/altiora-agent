@@ -6,7 +6,7 @@ A headless-first coding agent harness.
 
 Altiora runs a model against a real working directory: it streams a turn, executes tools, enforces permissions, and records everything in an append-only session log that can be resumed, forked, or replayed.
 
-Status: **M1 complete**. `altiora run` streams a single-turn request to any OpenAI-compatible endpoint. Tools, sessions, and permissions land next.
+Status: **M2 complete**. The agent loop runs up to 40 steps with eight tools and a harness-enforced permission engine. Sessions and compaction are next.
 
 ## Why another harness
 
@@ -25,6 +25,16 @@ Node.js 22.18 or newer. Development runs TypeScript directly through Node's type
 export ALTIORA_API_KEY=...
 altiora run "summarize this repository" --model deepseek-chat --base-url https://api.deepseek.com/v1
 ```
+
+Writing files and running commands requires an explicit rule:
+
+```sh
+altiora run "fix the failing test" --model deepseek-chat \
+  --allow read --allow glob --allow grep \
+  --allow "edit(src/**)" --allow "bash(node --test *)"
+```
+
+Rules use `tool(pattern)` syntax and are evaluated deny first, then ask, then allow. Read-only tools are allowed by default; `--permission-mode unattended` turns every unmatched `ask` into `deny`, and `--permission-mode plan` blocks all writes. Paths are resolved and rejected when they leave the workspace.
 
 Configuration resolves from CLI flags over `ALTIORA_*` environment variables over the project config in `.altiora/config.json` (only when trusted) over the user config printed by `altiora config path`.
 

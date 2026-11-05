@@ -42,4 +42,4 @@ npm run build
 
 ## Status
 
-M1 complete: OpenAI-compatible provider with SSE streaming, retries, and `reasoning_content` round-tripping; `altiora run` performs a single-turn request. Tools, permissions, sessions, and the loop are not implemented yet.
+M2 complete: the agent loop runs up to `maxSteps` with eight tools (`read`, `write`, `edit`, `bash`, `glob`, `grep`, `ls`, `todo_write`), a permission engine with `deny -> ask -> allow`, workspace path containment, and output truncation. Sessions and compaction are not implemented yet.
