@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { join } from "node:path";
+import { posix, win32 } from "node:path";
 import { test } from "node:test";
 import { projectConfigFile, resolveAppPaths, sessionBucket } from "../../src/config/paths.ts";
 
@@ -11,11 +11,11 @@ test("win32 paths come from APPDATA and LOCALAPPDATA", () => {
     },
     "win32",
   );
-  assert.equal(paths.configDir, join("C:\\Users\\u\\AppData\\Roaming", "altiora"));
-  assert.equal(paths.configFile, join(paths.configDir, "config.json"));
-  assert.equal(paths.dataDir, join("C:\\Users\\u\\AppData\\Local", "altiora"));
-  assert.equal(paths.sessionsDir, join(paths.dataDir, "sessions"));
-  assert.equal(paths.memoryFile, join(paths.configDir, "AGENTS.md"));
+  assert.equal(paths.configDir, win32.join("C:\\Users\\u\\AppData\\Roaming", "altiora"));
+  assert.equal(paths.configFile, win32.join(paths.configDir, "config.json"));
+  assert.equal(paths.dataDir, win32.join("C:\\Users\\u\\AppData\\Local", "altiora"));
+  assert.equal(paths.sessionsDir, win32.join(paths.dataDir, "sessions"));
+  assert.equal(paths.memoryFile, win32.join(paths.configDir, "AGENTS.md"));
 });
 
 test("posix paths follow XDG with fallbacks", () => {
@@ -23,17 +23,22 @@ test("posix paths follow XDG with fallbacks", () => {
     { HOME: "/home/u", XDG_CONFIG_HOME: "/cfg", XDG_DATA_HOME: "/data" },
     "linux",
   );
-  assert.equal(custom.configFile, join("/cfg", "altiora", "config.json"));
-  assert.equal(custom.sessionsDir, join("/data", "altiora", "sessions"));
+  assert.equal(custom.configFile, posix.join("/cfg", "altiora", "config.json"));
+  assert.equal(custom.sessionsDir, posix.join("/data", "altiora", "sessions"));
 
   const fallback = resolveAppPaths({ HOME: "/home/u" }, "linux");
-  assert.equal(fallback.configFile, join("/home/u", ".config", "altiora", "config.json"));
-  assert.equal(fallback.dataDir, join("/home/u", ".local", "share", "altiora"));
+  assert.equal(fallback.configFile, posix.join("/home/u", ".config", "altiora", "config.json"));
+  assert.equal(fallback.dataDir, posix.join("/home/u", ".local", "share", "altiora"));
 });
 
 test("explicit directory overrides win on both platforms", () => {
   const paths = resolveAppPaths(
-    { APPDATA: "C:\\roaming", LOCALAPPDATA: "C:\\local", ALTIORA_CONFIG_DIR: "D:\\cfg", ALTIORA_DATA_DIR: "D:\\data" },
+    {
+      APPDATA: "C:\\roaming",
+      LOCALAPPDATA: "C:\\local",
+      ALTIORA_CONFIG_DIR: "D:\\cfg",
+      ALTIORA_DATA_DIR: "D:\\data",
+    },
     "win32",
   );
   assert.equal(paths.configDir, "D:\\cfg");
@@ -41,7 +46,14 @@ test("explicit directory overrides win on both platforms", () => {
 });
 
 test("project config file lives under .altiora in the given cwd", () => {
-  assert.equal(projectConfigFile("D:\\proj"), join("D:\\proj", ".altiora", "config.json"));
+  assert.equal(
+    projectConfigFile("D:\\proj", "win32"),
+    win32.join("D:\\proj", ".altiora", "config.json"),
+  );
+  assert.equal(
+    projectConfigFile("/tmp/proj", "linux"),
+    posix.join("/tmp/proj", ".altiora", "config.json"),
+  );
 });
 
 test("session buckets are stable, short and case-insensitive on win32", () => {
