@@ -35,10 +35,11 @@ Project: Altiora. Package `altiora-agent`, binary `altiora`.
 ```sh
 node src/cli/main.ts --help
 npm test
+npm run lint
 npm run typecheck
 npm run build
 ```
 
 ## Status
 
-M0: scaffold, config resolution, CLI shell. The agent loop, providers, tools, permissions, and sessions are not implemented yet.
+M0 complete: scaffold, config resolution, CLI shell, lint, and CI. The agent loop, providers, tools, permissions, and sessions are not implemented yet.

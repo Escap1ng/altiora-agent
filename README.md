@@ -6,7 +6,7 @@ A headless-first coding agent harness.
 
 Altiora runs a model against a real working directory: it streams a turn, executes tools, enforces permissions, and records everything in an append-only session log that can be resumed, forked, or replayed.
 
-Status: **M0 scaffold**. The CLI only serves `--help`, `--version`, and `config path`. The agent loop lands in M1.
+Status: **M0 complete**. The CLI serves `--help`, `--version`, and `config path`. M1 adds the OpenAI-compatible provider.
 
 ## Why another harness
 
