@@ -58,4 +58,4 @@ Published as `altiora-agent`; the command is `altiora`.
 
 ## License
 
-MIT
+Apache-2.0
