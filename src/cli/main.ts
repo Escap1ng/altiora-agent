@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { projectConfigFile, resolveAppPaths } from "../config/paths.ts";
+import { runCommand } from "./run.ts";
 
 const EXIT_OK = 0;
 const EXIT_ERROR = 1;
@@ -53,8 +54,8 @@ function configCommand(args: string[]): number {
   return EXIT_USAGE;
 }
 
-export function main(argv: string[]): number {
-  const { values, positionals } = parseArgs({
+export async function main(argv: string[]): Promise<number> {
+  const { values } = parseArgs({
     args: argv,
     allowPositionals: true,
     strict: false,
@@ -69,20 +70,28 @@ export function main(argv: string[]): number {
     return EXIT_OK;
   }
 
-  const [command] = positionals;
+  const commandIndex = argv.findIndex((arg) => !arg.startsWith("-"));
+  const command = commandIndex === -1 ? undefined : argv[commandIndex];
   if (values.help === true || command === undefined) {
     process.stdout.write(`${HELP}\n`);
     return EXIT_OK;
   }
+  const rest = argv.slice(commandIndex + 1);
 
   switch (command) {
     case "run":
+      return runCommand(rest, {
+        cwd: process.cwd(),
+        env: process.env,
+        stdout: process.stdout,
+        stderr: process.stderr,
+      });
     case "init":
       return notImplemented(command);
     case "sessions":
       return notImplemented("sessions");
     case "config":
-      return configCommand(positionals.slice(1));
+      return configCommand(rest);
     default:
       process.stderr.write(`unknown command: ${command}\n`);
       process.stderr.write(`run '${BIN} --help' for usage\n`);
@@ -90,4 +99,4 @@ export function main(argv: string[]): number {
   }
 }
 
-process.exitCode = main(process.argv.slice(2));
+process.exitCode = await main(process.argv.slice(2));

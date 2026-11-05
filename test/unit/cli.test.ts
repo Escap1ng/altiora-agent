@@ -43,8 +43,8 @@ test("config path prints resolved locations and exits 0", () => {
   assert.match(result.stdout, /^project .+\.altiora.+config\.json$/m);
 });
 
-test("stub commands exit 1 and say what is missing", () => {
+test("run without a model reports a configuration problem", () => {
   const result = run(["run", "hello"]);
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /run is not implemented yet/);
+  assert.match(result.stderr, /missing model/);
 });

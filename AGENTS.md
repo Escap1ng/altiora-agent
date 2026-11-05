@@ -42,4 +42,4 @@ npm run build
 
 ## Status
 
-M0 complete: scaffold, config resolution, CLI shell, lint, and CI. The agent loop, providers, tools, permissions, and sessions are not implemented yet.
+M1 complete: OpenAI-compatible provider with SSE streaming, retries, and `reasoning_content` round-tripping; `altiora run` performs a single-turn request. Tools, permissions, sessions, and the loop are not implemented yet.
