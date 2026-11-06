@@ -1,8 +1,11 @@
+import type { CompactionConfig } from "../config/schema.ts";
 import type { PermissionEngine } from "../permissions/engine.ts";
 import { streamWithRetry, type RetryPolicy } from "../providers/retry.ts";
 import type { SessionLog } from "../session/log.ts";
 import type { ToolContext, ToolRegistry } from "../tools/registry.ts";
+import { compactMessages, shouldCompact } from "./compaction.ts";
 import { HarnessError } from "./errors.ts";
+import { TokenEstimator } from "./tokens.ts";
 import type { Message, Part, Provider, ProviderRequest, Usage } from "./types.ts";
 
 export type StopReason = "completed" | "max_steps" | "loop_detected" | "failed";
@@ -13,6 +16,7 @@ export type RunEvent =
   | { type: "reasoning-delta"; text: string }
   | { type: "tool-call"; id: string; name: string; input: unknown }
   | { type: "tool-result"; id: string; name: string; output: string; isError: boolean; denied: boolean }
+  | { type: "compaction"; tokensBefore: number; tokensAfter: number }
   | { type: "step-end"; step: number; reason: StopReason | "tool_calls" };
 
 export interface LoopOptions {
@@ -30,6 +34,11 @@ export interface LoopOptions {
   retry: RetryPolicy;
   history?: Message[];
   turn?: number;
+  systemPrompt?: string;
+  estimator?: TokenEstimator;
+  compaction?: CompactionConfig;
+  contextWindow?: number;
+  reserveOutputTokens?: number;
   log?: SessionLog;
   onEvent?: (event: RunEvent) => void;
 }
@@ -250,6 +259,8 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
   };
   const declarations = options.registry.declarations();
   const repeated = new Map<string, number>();
+  const estimator = options.estimator ?? new TokenEstimator();
+  let compacted = false;
   let text = "";
   let settled = false;
 
@@ -266,13 +277,62 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
     for (let step = 0; step < options.maxSteps; step++) {
       options.onEvent?.({ type: "step-start", step });
       options.log?.append({ t: "step/start", step });
+
+      let requestMessages: Message[] =
+        options.systemPrompt === undefined
+          ? messages
+          : [{ role: "system", content: options.systemPrompt }, ...messages];
+      let estimated = estimator.estimateMessages(requestMessages);
+
+      if (
+        options.compaction !== undefined &&
+        !compacted &&
+        shouldCompact(
+          estimated,
+          options.compaction,
+          options.contextWindow ?? 128000,
+          options.reserveOutputTokens ?? 0,
+        )
+      ) {
+        const outcome = await compactMessages(messages, {
+          provider: options.provider,
+          model: options.model,
+          config: options.compaction,
+          estimator,
+          signal: options.signal,
+          policy: options.retry,
+        });
+        if (outcome !== null) {
+          messages.splice(0, messages.length, ...outcome.messages);
+          options.log?.append({
+            t: "compaction",
+            tokensBefore: outcome.tokensBefore,
+            tokensAfter: outcome.tokensAfter,
+            summary: outcome.summary,
+            keptMessages: outcome.kept,
+          });
+          options.onEvent?.({
+            type: "compaction",
+            tokensBefore: outcome.tokensBefore,
+            tokensAfter: outcome.tokensAfter,
+          });
+          compacted = true;
+          requestMessages =
+            options.systemPrompt === undefined
+              ? messages
+              : [{ role: "system", content: options.systemPrompt }, ...messages];
+          estimated = estimator.estimateMessages(requestMessages);
+        }
+      }
+
       const request: ProviderRequest = {
         model: options.model,
-        messages,
+        messages: requestMessages,
         ...(declarations.length === 0 ? {} : { tools: declarations }),
       };
 
       const result = await collectStep(request, options);
+      if (result.usage.inputTokens > 0) estimator.observe(estimated, result.usage.inputTokens);
       usage.inputTokens += result.usage.inputTokens;
       usage.outputTokens += result.usage.outputTokens;
       text += result.text;

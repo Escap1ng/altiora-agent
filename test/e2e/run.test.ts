@@ -88,7 +88,9 @@ test("prints streamed text from an openai-compatible endpoint", async () => {
 
     const body = server.requests[0]?.body;
     assert.equal(body?.["model"], "test-model");
-    assert.deepEqual(body?.["messages"], [{ role: "user", content: "say hi" }]);
+    const messages = body?.["messages"] as Record<string, unknown>[];
+    assert.equal(messages[0]?.["role"], "system");
+    assert.deepEqual(messages[1], { role: "user", content: "say hi" });
   } finally {
     await server.close();
   }
@@ -133,11 +135,12 @@ test("runs tools across steps and feeds results back", async () => {
 
     const second = server.requests[1]?.body;
     const messages = second?.["messages"] as Record<string, unknown>[];
-    assert.equal(messages.length, 3);
-    assert.equal(messages[1]?.["role"], "assistant");
-    assert.equal(messages[2]?.["role"], "tool");
-    assert.equal(messages[2]?.["tool_call_id"], "call_1");
-    assert.match(String(messages[2]?.["content"]), /wrote 2 bytes to note\.txt/);
+    assert.equal(messages.length, 4);
+    assert.equal(messages[0]?.["role"], "system");
+    assert.equal(messages[2]?.["role"], "assistant");
+    assert.equal(messages[3]?.["role"], "tool");
+    assert.equal(messages[3]?.["tool_call_id"], "call_1");
+    assert.match(String(messages[3]?.["content"]), /wrote 2 bytes to note\.txt/);
 
     const bashResult = (server.requests[2]?.body?.["messages"] as Record<string, unknown>[]).at(-1);
     assert.match(String(bashResult?.["content"]), /42/);
@@ -256,9 +259,9 @@ test("resumes a session with the prior conversation", async () => {
     const messages = server.requests[1]?.body?.["messages"] as Record<string, unknown>[];
     assert.deepEqual(
       messages.map((message) => message["role"]),
-      ["user", "assistant", "user"],
+      ["system", "user", "assistant", "user"],
     );
-    assert.equal(messages[0]?.["content"], "first turn");
+    assert.equal(messages[1]?.["content"], "first turn");
   } finally {
     await server.close();
   }

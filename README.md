@@ -6,7 +6,7 @@ A headless-first coding agent harness.
 
 Altiora runs a model against a real working directory: it streams a turn, executes tools, enforces permissions, and records everything in an append-only session log that can be resumed, forked, or replayed.
 
-Status: **M3 complete**. Every run is recorded as an append-only JSONL session that can be resumed, forked, or replayed, and the CLI can emit NDJSON events for scripts. Context compaction is next.
+Status: **M4 complete**. Project instructions are loaded from `AGENTS.md`, token usage is estimated and calibrated, and long conversations compact automatically into a summary plus a verbatim tail. Subagents and web fetch are next.
 
 ## Why another harness
 
@@ -48,6 +48,12 @@ altiora run "try another approach" --fork <id>
 ```
 
 For scripts, `--output-format json` prints one result object and `--output-format stream-json` prints NDJSON events (`system`, `assistant`, `user`, `result`) with a stable `session_id`.
+
+## Project instructions and context
+
+`AGENTS.md` files are loaded from the repository root down to the working directory, plus a global file in the config directory. A line that is just `@path` imports another file, up to four levels deep and only inside the repository; the combined text is capped at 48k characters.
+
+Before each step the harness estimates the request size, calibrates the estimate against the provider's reported input tokens, and once the context passes 85% of the usable window it summarizes the older part into a fixed template, keeps the most recent tail verbatim, and records the compaction in the session log. The summary survives replay, so `sessions show` and resume see the same context the model saw.
 
 ## Development
 

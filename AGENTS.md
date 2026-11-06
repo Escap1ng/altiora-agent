@@ -42,4 +42,4 @@ npm run build
 
 ## Status
 
-M3 complete: append-only JSONL sessions with `deriveMessages` projection, resume/fork, `sessions list|show`, and `text|json|stream-json` output. Compaction and AGENTS.md memory are not implemented yet.
+M4 complete: token estimation with usage calibration, hierarchical AGENTS.md memory with `@imports`, and automatic compaction recorded as a session event with a verbatim tail. Subagents, web fetch and release tooling are not implemented yet.

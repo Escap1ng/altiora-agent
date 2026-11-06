@@ -1,4 +1,4 @@
-import type { Part, Usage } from "../core/types.ts";
+import type { Message, Part, Usage } from "../core/types.ts";
 
 export const RECORD_VERSION = 1;
 
@@ -51,7 +51,7 @@ export type Rec =
       tokensBefore: number;
       tokensAfter: number;
       summary: string;
-      keepFromSeq: number;
+      keptMessages: Message[];
     })
   | (Base & { t: "turn/end"; turn: number; stopReason: string; usage: Usage })
   | (Base & { t: "notice"; level: "info" | "warn"; text: string });

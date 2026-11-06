@@ -87,11 +87,18 @@ test("skips failed attempts and inserts compaction summaries", () => {
       status: "ok",
       content: [{ type: "text", text: "recovered" }],
     },
-    { ...base("compaction"), t: "compaction", tokensBefore: 100, tokensAfter: 10, summary: "earlier work", keepFromSeq: 4 },
+    {
+      ...base("compaction"),
+      t: "compaction",
+      tokensBefore: 100,
+      tokensAfter: 10,
+      summary: "earlier work",
+      keptMessages: [],
+    },
     { ...base("turn/start"), t: "turn/start", turn: 2, input: "next" },
   ];
 
   const { messages } = deriveMessages(records);
-  assert.deepEqual(messages.map((message) => message.role), ["user", "assistant", "system", "user"]);
-  assert.equal(messages[2]?.role === "system" ? messages[2].content : "", "Summary of earlier conversation:\nearlier work");
+  assert.deepEqual(messages.map((message) => message.role), ["system", "user"]);
+  assert.equal(messages[0]?.role === "system" ? messages[0].content : "", "Summary of earlier conversation:\nearlier work");
 });

@@ -2,10 +2,13 @@ import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { loadConfig } from "../config/load.ts";
-import { sessionDirFor } from "../config/paths.ts";
+import { loadMemory } from "../config/memory.ts";
+import { resolveAppPaths, sessionDirFor } from "../config/paths.ts";
 import type { Config, PermissionMode, PermissionRule } from "../config/schema.ts";
+import { buildSystemPrompt } from "../core/context.ts";
 import { toHarnessError } from "../core/errors.ts";
 import { runAgent, type RunEvent } from "../core/loop.ts";
+import { TokenEstimator } from "../core/tokens.ts";
 import type { Message } from "../core/types.ts";
 import { createPermissionEngine } from "../permissions/engine.ts";
 import { parseRuleString } from "../permissions/rules.ts";
@@ -171,6 +174,19 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
   });
   const provider = new OpenAiCompatProvider({ baseUrl: config.baseUrl, apiKey });
 
+  const memory = loadMemory({
+    cwd: io.cwd,
+    globalFile: resolveAppPaths(io.env).memoryFile,
+    platform: process.platform,
+  });
+  const systemPrompt = buildSystemPrompt({
+    cwd: io.cwd,
+    platform: process.platform,
+    shell: config.tools.bash.shell,
+    memory: memory.text,
+  });
+  const estimator = new TokenEstimator();
+
   const streamJson =
     format === "stream-json"
       ? createStreamJsonRenderer(
@@ -215,6 +231,11 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       ...(session.history === undefined ? {} : { history: session.history }),
       turn: session.turn,
       log: session.log,
+      systemPrompt,
+      estimator,
+      compaction: config.compaction,
+      contextWindow: config.contextWindow,
+      reserveOutputTokens: config.reserveOutputTokens,
       onEvent: (event) => {
         if (event.type === "step-start") {
           steps += 1;
@@ -226,6 +247,10 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
           if (format === "text") io.stderr.write(`[${summarize(event)}]\n`);
         } else if (event.type === "tool-result" && event.isError) {
           if (format === "text") io.stderr.write(`[${event.name}] ${event.output.split("\n")[0]}\n`);
+        } else if (event.type === "compaction" && verbose) {
+          io.stderr.write(
+            `[compaction] ${event.tokensBefore} -> ${event.tokensAfter} estimated tokens\n`,
+          );
         }
         streamJson?.event(event);
       },

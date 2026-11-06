@@ -36,7 +36,9 @@ export function deriveMessages(records: Rec[]): DerivedHistory {
         });
         break;
       case "compaction":
+        messages.length = 0;
         messages.push({ role: "system", content: `Summary of earlier conversation:\n${record.summary}` });
+        messages.push(...record.keptMessages);
         break;
       case "session/start":
       case "step/start":

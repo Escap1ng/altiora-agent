@@ -100,6 +100,14 @@ export function createStreamJsonRenderer(
         case "step-end":
           flush();
           break;
+        case "compaction":
+          write({
+            type: "system",
+            subtype: "compaction",
+            tokens_before: event.tokensBefore,
+            tokens_after: event.tokensAfter,
+          });
+          break;
         case "reasoning-delta":
           break;
       }
