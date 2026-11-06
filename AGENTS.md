@@ -42,4 +42,4 @@ npm run build
 
 ## Status
 
-M5 complete: ten tools including `task` (non-recursive subagents) and `webfetch` (SSRF guard, 5 MB cap), `altiora init`, release metadata, and a verified offline package install. The interactive TUI is not implemented yet.
+M6 complete: `altiora chat` provides an interactive readline session with streaming output, tool activity, y/N approval for `ask` rules, `/new` and `/exit`; the loop gained a `confirm` hook. All planned milestones are shipped.

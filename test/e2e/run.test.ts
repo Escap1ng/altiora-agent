@@ -338,3 +338,48 @@ test("init writes project config and AGENTS.md once", async () => {
   const second = await runCli(["init"], { cwd, env: envFor(cwd) });
   assert.match(second.stdout, /nothing to write/);
 });
+
+test("chat streams a turn and exits on /exit", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer(() => ({
+    chunks: sseChunks([{ choices: [{ delta: { content: "hello from chat" }, finish_reason: "stop" }] }]),
+  }));
+
+  try {
+    const result = await new Promise<CliResult>((resolve, reject) => {
+      const child = spawn(process.execPath, [cli, "chat", "--base-url", server.url, "--model", "m"], {
+        cwd,
+        env: envFor(cwd),
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+      let stdout = "";
+      let stderr = "";
+      const timer = setTimeout(() => {
+        child.kill();
+        reject(new Error("chat did not exit in time"));
+      }, 20000);
+      child.stdout.on("data", (chunk: Buffer) => {
+        stdout += chunk.toString();
+      });
+      child.stderr.on("data", (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      child.on("error", (error) => {
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        resolve({ code, stdout, stderr });
+      });
+      child.stdin.write("hi\n/exit\n");
+      child.stdin.end();
+    });
+
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /hello from chat/);
+    assert.equal(server.requests.length, 1);
+  } finally {
+    await server.close();
+  }
+});

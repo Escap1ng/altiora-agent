@@ -6,7 +6,7 @@ A headless-first coding agent harness.
 
 Altiora runs a model against a real working directory: it streams a turn, executes tools, enforces permissions, and records everything in an append-only session log that can be resumed, forked, or replayed.
 
-Status: **M5 complete**. Ten tools including subagents and a guarded web fetch, project init, and a verified offline package. The interactive TUI is the remaining milestone.
+Status: **M6 complete**. `altiora chat` runs an interactive session with streaming output, inline tool activity and y/N approval for `ask` rules. All planned milestones are shipped.
 
 ## Why another harness
 
@@ -39,6 +39,8 @@ Rules use `tool(pattern)` syntax and are evaluated deny first, then ask, then al
 `task` runs a subagent with a fresh context and a tool set without `task` itself, so subagents cannot nest. `webfetch` only accepts public http(s) URLs: loopback, private, link-local and metadata addresses are rejected, redirects are re-checked, and responses are capped at 5 MB.
 
 `altiora init` writes `.altiora/config.json` and an `AGENTS.md` stub for a new project.
+
+For an interactive session, run `altiora chat --model deepseek-chat`. It keeps one session across turns, streams the answer, prints tool activity, and asks y/N whenever a rule resolves to `ask`; `/new` starts a fresh session and `/exit` quits. Ctrl+C during a turn aborts it without ending the session.
 
 Configuration resolves from CLI flags over `ALTIORA_*` environment variables over the project config in `.altiora/config.json` (only when trusted) over the user config printed by `altiora config path`.
 

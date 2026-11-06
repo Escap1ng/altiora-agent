@@ -40,6 +40,11 @@ export interface LoopOptions {
   contextWindow?: number;
   reserveOutputTokens?: number;
   runSubagent?: (prompt: string) => Promise<{ text: string; isError: boolean }>;
+  confirm?: (request: {
+    tool: string;
+    resources: string[];
+    reason: string;
+  }) => Promise<boolean>;
   log?: SessionLog;
   onEvent?: (event: RunEvent) => void;
 }
@@ -208,7 +213,14 @@ async function runTool(
     ...(decision.ruleId === undefined ? {} : { ruleId: decision.ruleId }),
   });
 
-  if (decision.effect !== "allow") return deny(`denied: ${decision.reason}`);
+  if (decision.effect === "deny") return deny(`denied: ${decision.reason}`);
+  if (decision.effect === "ask") {
+    const approved =
+      options.confirm === undefined
+        ? false
+        : await options.confirm({ tool: call.name, resources, reason: decision.reason });
+    if (!approved) return deny(`denied: ${decision.reason} (not approved)`);
+  }
 
   const started = Date.now();
   try {

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { projectConfigFile, resolveAppPaths } from "../config/paths.ts";
+import { chatCommand } from "./chat.ts";
 import { initCommand } from "./init.ts";
 import { runCommand } from "./run.ts";
 import { sessionsCommand } from "./sessions.ts";
@@ -24,6 +25,7 @@ const HELP = `Usage: ${BIN} <command> [options]
 
 Commands:
   run <prompt>          Run a headless agent turn
+  chat                  Start an interactive session
   sessions list|show    Inspect saved sessions
   config path|get|set   Inspect or change configuration
   init                  Write project config and AGENTS.md
@@ -85,6 +87,15 @@ export async function main(argv: string[]): Promise<number> {
       return runCommand(rest, {
         cwd: process.cwd(),
         env: process.env,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        version: pkg.version,
+      });
+    case "chat":
+      return chatCommand(rest, {
+        cwd: process.cwd(),
+        env: process.env,
+        stdin: process.stdin,
         stdout: process.stdout,
         stderr: process.stderr,
         version: pkg.version,
