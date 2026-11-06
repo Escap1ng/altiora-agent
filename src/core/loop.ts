@@ -1,10 +1,11 @@
 import type { PermissionEngine } from "../permissions/engine.ts";
 import { streamWithRetry, type RetryPolicy } from "../providers/retry.ts";
+import type { SessionLog } from "../session/log.ts";
 import type { ToolContext, ToolRegistry } from "../tools/registry.ts";
 import { HarnessError } from "./errors.ts";
 import type { Message, Part, Provider, ProviderRequest, Usage } from "./types.ts";
 
-export type StopReason = "completed" | "max_steps" | "loop_detected";
+export type StopReason = "completed" | "max_steps" | "loop_detected" | "failed";
 
 export type RunEvent =
   | { type: "step-start"; step: number }
@@ -27,6 +28,9 @@ export interface LoopOptions {
   maxOutputChars: number;
   bash: ToolContext["bash"];
   retry: RetryPolicy;
+  history?: Message[];
+  turn?: number;
+  log?: SessionLog;
   onEvent?: (event: RunEvent) => void;
 }
 
@@ -56,6 +60,13 @@ interface StepOutput {
   reasoning: string;
   usage: Usage;
   toolCalls: ToolCall[];
+}
+
+interface ToolOutcome {
+  output: string;
+  isError: boolean;
+  denied: boolean;
+  truncated: boolean;
 }
 
 async function collectStep(request: ProviderRequest, options: LoopOptions): Promise<StepOutput> {
@@ -126,44 +137,51 @@ async function runTool(
   call: ToolCall,
   context: ToolContext,
   options: LoopOptions,
-): Promise<{ output: string; isError: boolean; denied: boolean }> {
+  step: number,
+): Promise<ToolOutcome> {
   options.onEvent?.({ type: "tool-call", id: call.id, name: call.name, input: call.input });
 
-  if (call.error !== undefined) {
+  const deny = (output: string): ToolOutcome => {
     options.onEvent?.({
       type: "tool-result",
       id: call.id,
       name: call.name,
-      output: call.error,
+      output,
+      isError: true,
+      denied: true,
+    });
+    return { output, isError: true, denied: true, truncated: false };
+  };
+
+  const fail = (output: string): ToolOutcome => {
+    options.onEvent?.({
+      type: "tool-result",
+      id: call.id,
+      name: call.name,
+      output,
       isError: true,
       denied: false,
     });
-    return { output: call.error, isError: true, denied: false };
-  }
+    return { output, isError: true, denied: false, truncated: false };
+  };
+
+  if (call.error !== undefined) return fail(call.error);
 
   const definition = options.registry.get(call.name);
-  if (definition === undefined) {
-    const output = `unknown tool: ${call.name}`;
-    options.onEvent?.({ type: "tool-result", id: call.id, name: call.name, output, isError: true, denied: false });
-    return { output, isError: true, denied: false };
-  }
+  if (definition === undefined) return fail(`unknown tool: ${call.name}`);
 
   let input: unknown;
   try {
     input = definition.parse(call.input);
   } catch (error) {
-    const output = error instanceof Error ? error.message : String(error);
-    options.onEvent?.({ type: "tool-result", id: call.id, name: call.name, output, isError: true, denied: false });
-    return { output, isError: true, denied: false };
+    return fail(error instanceof Error ? error.message : String(error));
   }
 
   let resources: string[];
   try {
     resources = definition.resources?.(input, context) ?? [];
   } catch (error) {
-    const output = error instanceof Error ? error.message : String(error);
-    options.onEvent?.({ type: "tool-result", id: call.id, name: call.name, output, isError: true, denied: false });
-    return { output, isError: true, denied: false };
+    return fail(error instanceof Error ? error.message : String(error));
   }
 
   const decision = options.permissions.decide({
@@ -171,14 +189,29 @@ async function runTool(
     resources,
     readOnly: definition.readOnly === true,
   });
-  if (decision.effect !== "allow") {
-    const output = `denied: ${decision.reason}`;
-    options.onEvent?.({ type: "tool-result", id: call.id, name: call.name, output, isError: true, denied: true });
-    return { output, isError: true, denied: true };
-  }
+  options.log?.append({
+    t: "permission",
+    callId: call.id,
+    tool: call.name,
+    effect: decision.effect,
+    source: decision.ruleId === undefined ? "builtin" : "rule",
+    ...(decision.ruleId === undefined ? {} : { ruleId: decision.ruleId }),
+  });
 
+  if (decision.effect !== "allow") return deny(`denied: ${decision.reason}`);
+
+  const started = Date.now();
   try {
     const result = await definition.execute(input, context);
+    options.log?.append({
+      t: "tool/result",
+      step,
+      callId: call.id,
+      status: result.isError ? "error" : "ok",
+      output: result.output,
+      truncated: result.truncated,
+      durationMs: Date.now() - started,
+    });
     options.onEvent?.({
       type: "tool-result",
       id: call.id,
@@ -187,16 +220,25 @@ async function runTool(
       isError: result.isError,
       denied: false,
     });
-    return { output: result.output, isError: result.isError, denied: false };
+    return { output: result.output, isError: result.isError, denied: false, truncated: result.truncated };
   } catch (error) {
     const output = error instanceof HarnessError ? error.message : String(error);
-    options.onEvent?.({ type: "tool-result", id: call.id, name: call.name, output, isError: true, denied: false });
-    return { output, isError: true, denied: false };
+    options.log?.append({
+      t: "tool/result",
+      step,
+      callId: call.id,
+      status: "error",
+      output,
+      truncated: false,
+      durationMs: Date.now() - started,
+    });
+    return fail(output);
   }
 }
 
-export async function runAgent(prompt: string, options: LoopOptions): Promise<RunResult> {
-  const messages: Message[] = [{ role: "user", content: prompt }];
+export async function runAgent(input: string, options: LoopOptions): Promise<RunResult> {
+  const turn = options.turn ?? 1;
+  const messages: Message[] = [...(options.history ?? []), { role: "user", content: input }];
   const usage: Usage = { inputTokens: 0, outputTokens: 0 };
   const context: ToolContext = {
     cwd: options.cwd,
@@ -209,51 +251,71 @@ export async function runAgent(prompt: string, options: LoopOptions): Promise<Ru
   const declarations = options.registry.declarations();
   const repeated = new Map<string, number>();
   let text = "";
+  let settled = false;
+
+  options.log?.append({ t: "turn/start", turn, input });
 
   const finish = (stopReason: StopReason, step: number): RunResult => {
+    settled = true;
+    options.log?.append({ t: "turn/end", turn, stopReason, usage });
     options.onEvent?.({ type: "step-end", step, reason: stopReason });
     return { text, messages, usage, stopReason };
   };
 
-  for (let step = 0; step < options.maxSteps; step++) {
-    options.onEvent?.({ type: "step-start", step });
-    const request: ProviderRequest = {
-      model: options.model,
-      messages,
-      ...(declarations.length === 0 ? {} : { tools: declarations }),
-    };
+  try {
+    for (let step = 0; step < options.maxSteps; step++) {
+      options.onEvent?.({ type: "step-start", step });
+      options.log?.append({ t: "step/start", step });
+      const request: ProviderRequest = {
+        model: options.model,
+        messages,
+        ...(declarations.length === 0 ? {} : { tools: declarations }),
+      };
 
-    const result = await collectStep(request, options);
-    usage.inputTokens += result.usage.inputTokens;
-    usage.outputTokens += result.usage.outputTokens;
-    text += result.text;
-    messages.push({
-      role: "assistant",
-      content: result.parts,
-      ...(result.reasoning === "" ? {} : { reasoning: result.reasoning }),
-    });
+      const result = await collectStep(request, options);
+      usage.inputTokens += result.usage.inputTokens;
+      usage.outputTokens += result.usage.outputTokens;
+      text += result.text;
+      messages.push({
+        role: "assistant",
+        content: result.parts,
+        ...(result.reasoning === "" ? {} : { reasoning: result.reasoning }),
+      });
+      options.log?.append({
+        t: "assistant/attempt",
+        step,
+        status: "ok",
+        content: result.parts,
+        ...(result.reasoning === "" ? {} : { reasoning: result.reasoning }),
+        usage: result.usage,
+      });
 
-    if (result.toolCalls.length === 0) return finish("completed", step);
+      if (result.toolCalls.length === 0) return finish("completed", step);
 
-    const signature = JSON.stringify(result.toolCalls.map((call) => [call.name, call.input]));
-    const count = (repeated.get(signature) ?? 0) + 1;
-    repeated.set(signature, count);
-    if (count >= 3) {
-      options.onEvent?.({ type: "step-end", step, reason: "loop_detected" });
-      return { text, messages, usage, stopReason: "loop_detected" };
+      const signature = JSON.stringify(result.toolCalls.map((call) => [call.name, call.input]));
+      const count = (repeated.get(signature) ?? 0) + 1;
+      repeated.set(signature, count);
+      if (count >= 3) return finish("loop_detected", step);
+
+      for (const call of result.toolCalls.slice(0, options.maxToolCallsPerStep)) {
+        options.log?.append({ t: "tool/call", step, callId: call.id, name: call.name, input: call.input });
+        const outcome = await runTool(call, context, options, step);
+        messages.push({ role: "tool", toolCallId: call.id, output: outcome.output, isError: outcome.isError });
+      }
+      for (const skipped of result.toolCalls.slice(options.maxToolCallsPerStep)) {
+        const output = `not executed: more than ${options.maxToolCallsPerStep} tool calls in one step`;
+        messages.push({ role: "tool", toolCallId: skipped.id, output, isError: true });
+      }
+
+      options.log?.append({ t: "step/end", step, stopReason: "tool_calls" });
+      options.onEvent?.({ type: "step-end", step, reason: "tool_calls" });
     }
 
-    for (const call of result.toolCalls.slice(0, options.maxToolCallsPerStep)) {
-      const outcome = await runTool(call, context, options);
-      messages.push({ role: "tool", toolCallId: call.id, output: outcome.output, isError: outcome.isError });
+    return finish("max_steps", options.maxSteps);
+  } catch (error) {
+    if (!settled) {
+      options.log?.append({ t: "turn/end", turn, stopReason: "failed", usage });
     }
-    for (const skipped of result.toolCalls.slice(options.maxToolCallsPerStep)) {
-      const output = `not executed: more than ${options.maxToolCallsPerStep} tool calls in one step`;
-      messages.push({ role: "tool", toolCallId: skipped.id, output, isError: true });
-    }
-
-    options.onEvent?.({ type: "step-end", step, reason: "tool_calls" });
+    throw error;
   }
-
-  return finish("max_steps", options.maxSteps);
 }

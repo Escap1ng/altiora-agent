@@ -11,6 +11,14 @@ import { sseChunks, startMockServer } from "../mock/openai-server.ts";
 const cli = fileURLToPath(new URL("../../src/cli/main.ts", import.meta.url));
 const cleanups: string[] = [];
 
+function envFor(cwd: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    ALTIORA_API_KEY: "test-key",
+    ALTIORA_DATA_DIR: join(cwd, ".data"),
+  };
+}
+
 after(async () => {
   await Promise.all(cleanups.map((directory) => rm(directory, { recursive: true, force: true })));
 });
@@ -71,7 +79,7 @@ test("prints streamed text from an openai-compatible endpoint", async () => {
   try {
     const result = await runCli(["run", "say hi", "--base-url", server.url, "--model", "test-model"], {
       cwd,
-      env: { ...process.env, ALTIORA_API_KEY: "test-key" },
+      env: envFor(cwd),
     });
 
     assert.equal(result.code, 0);
@@ -114,7 +122,7 @@ test("runs tools across steps and feeds results back", async () => {
         "--allow",
         "bash",
       ],
-      { cwd, env: { ...process.env, ALTIORA_API_KEY: "test-key" } },
+      { cwd, env: envFor(cwd) },
     );
 
     assert.equal(result.code, 0);
@@ -149,7 +157,7 @@ test("denies tools without a matching allow rule", async () => {
   try {
     const result = await runCli(["run", "write a file", "--base-url", server.url, "--model", "m"], {
       cwd,
-      env: { ...process.env, ALTIORA_API_KEY: "test-key" },
+      env: envFor(cwd),
     });
 
     assert.equal(result.code, 0);
@@ -166,11 +174,146 @@ test("denies tools without a matching allow rule", async () => {
 
 test("exits 1 with a clear message when the api key is missing", async () => {
   const cwd = await workspace();
-  const env: NodeJS.ProcessEnv = { ...process.env };
+  const env = envFor(cwd);
   delete env.ALTIORA_API_KEY;
 
   const result = await runCli(["run", "hi", "--model", "some-model"], { cwd, env });
 
   assert.equal(result.code, 1);
   assert.match(result.stderr, /missing api key: set ALTIORA_API_KEY/);
+});
+
+interface NdjsonLine {
+  type: string;
+  subtype?: string;
+  session_id?: string;
+  message?: { role: string; content: { type: string; text?: string }[] };
+  result?: string;
+}
+
+function parseNdjson(stdout: string): NdjsonLine[] {
+  return stdout
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line) as NdjsonLine);
+}
+
+test("emits stream-json events and a result", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer(() => ({
+    chunks: sseChunks([{ choices: [{ delta: { content: "hi" }, finish_reason: "stop" }] }]),
+  }));
+  try {
+    const result = await runCli(
+      ["run", "hello", "--base-url", server.url, "--model", "m", "--output-format", "stream-json"],
+      { cwd, env: envFor(cwd) },
+    );
+
+    assert.equal(result.code, 0);
+    const lines = parseNdjson(result.stdout);
+    assert.equal(lines[0]?.type, "system");
+    assert.equal(lines[0]?.subtype, "init");
+    assert.match(lines[0]?.session_id ?? "", /^s_/);
+
+    const assistant = lines.find((line) => line.type === "assistant");
+    assert.equal(assistant?.message?.content[0]?.text, "hi");
+
+    const last = lines.at(-1);
+    assert.equal(last?.type, "result");
+    assert.equal(last?.subtype, "success");
+    assert.equal(last?.session_id, lines[0]?.session_id);
+  } finally {
+    await server.close();
+  }
+});
+
+test("resumes a session with the prior conversation", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer((_request, index) => ({
+    chunks: sseChunks([
+      { choices: [{ delta: { content: index === 0 ? "first" : "second" }, finish_reason: "stop" }] },
+    ]),
+  }));
+
+  try {
+    const first = await runCli(
+      ["run", "first turn", "--base-url", server.url, "--model", "m"],
+      { cwd, env: envFor(cwd) },
+    );
+    assert.equal(first.stdout, "first\n");
+
+    const list = await runCli(["sessions", "list", "--json"], { cwd, env: envFor(cwd) });
+    const sessions = JSON.parse(list.stdout) as { id: string }[];
+    assert.equal(sessions.length, 1);
+    const id = sessions[0]!.id;
+
+    const second = await runCli(
+      ["run", "another", "--resume", id, "--base-url", server.url, "--model", "m"],
+      { cwd, env: envFor(cwd) },
+    );
+    assert.equal(second.stdout, "second\n");
+
+    const messages = server.requests[1]?.body?.["messages"] as Record<string, unknown>[];
+    assert.deepEqual(
+      messages.map((message) => message["role"]),
+      ["user", "assistant", "user"],
+    );
+    assert.equal(messages[0]?.["content"], "first turn");
+  } finally {
+    await server.close();
+  }
+});
+
+test("forks a session into a new log without touching the source", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer((_request, index) => ({
+    chunks: sseChunks([
+      { choices: [{ delta: { content: index === 0 ? "one" : "two" }, finish_reason: "stop" }] },
+    ]),
+  }));
+
+  try {
+    await runCli(["run", "base", "--base-url", server.url, "--model", "m"], { cwd, env: envFor(cwd) });
+    const list = await runCli(["sessions", "list", "--json"], { cwd, env: envFor(cwd) });
+    const sourceId = (JSON.parse(list.stdout) as { id: string }[])[0]!.id;
+
+    const forked = await runCli(
+      ["run", "child", "--fork", sourceId, "--base-url", server.url, "--model", "m"],
+      { cwd, env: envFor(cwd) },
+    );
+    assert.equal(forked.stdout, "two\n");
+
+    const after = JSON.parse(
+      (await runCli(["sessions", "list", "--json"], { cwd, env: envFor(cwd) })).stdout,
+    ) as { id: string }[];
+    assert.equal(after.length, 2);
+    assert.ok(after.some((session) => session.id === sourceId));
+    assert.ok(after.some((session) => session.id !== sourceId));
+
+    const show = await runCli(["sessions", "show", sourceId], { cwd, env: envFor(cwd) });
+    assert.match(show.stdout, /assistant: one/);
+  } finally {
+    await server.close();
+  }
+});
+
+test("prints a single json result object", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer(() => ({
+    chunks: sseChunks([{ choices: [{ delta: { content: "hi" }, finish_reason: "stop" }] }]),
+  }));
+  try {
+    const result = await runCli(
+      ["run", "hello", "--base-url", server.url, "--model", "m", "--output-format", "json"],
+      { cwd, env: envFor(cwd) },
+    );
+
+    assert.equal(result.code, 0);
+    const parsed = JSON.parse(result.stdout) as { type: string; result: string; subtype: string };
+    assert.equal(parsed.type, "result");
+    assert.equal(parsed.subtype, "success");
+    assert.equal(parsed.result, "hi");
+  } finally {
+    await server.close();
+  }
 });

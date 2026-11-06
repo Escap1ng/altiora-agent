@@ -6,7 +6,7 @@ A headless-first coding agent harness.
 
 Altiora runs a model against a real working directory: it streams a turn, executes tools, enforces permissions, and records everything in an append-only session log that can be resumed, forked, or replayed.
 
-Status: **M2 complete**. The agent loop runs up to 40 steps with eight tools and a harness-enforced permission engine. Sessions and compaction are next.
+Status: **M3 complete**. Every run is recorded as an append-only JSONL session that can be resumed, forked, or replayed, and the CLI can emit NDJSON events for scripts. Context compaction is next.
 
 ## Why another harness
 
@@ -37,6 +37,17 @@ altiora run "fix the failing test" --model deepseek-chat \
 Rules use `tool(pattern)` syntax and are evaluated deny first, then ask, then allow. Read-only tools are allowed by default; `--permission-mode unattended` turns every unmatched `ask` into `deny`, and `--permission-mode plan` blocks all writes. Paths are resolved and rejected when they leave the workspace.
 
 Configuration resolves from CLI flags over `ALTIORA_*` environment variables over the project config in `.altiora/config.json` (only when trusted) over the user config printed by `altiora config path`.
+
+Sessions are append-only JSONL files in the user data directory. Every turn, attempt, tool call, permission decision and tool result is recorded; model context is projected from that log, so interrupted tool calls are settled on resume.
+
+```sh
+altiora sessions list
+altiora sessions show <id>
+altiora run "keep going" --resume <id>
+altiora run "try another approach" --fork <id>
+```
+
+For scripts, `--output-format json` prints one result object and `--output-format stream-json` prints NDJSON events (`system`, `assistant`, `user`, `result`) with a stable `session_id`.
 
 ## Development
 

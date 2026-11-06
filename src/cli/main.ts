@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { projectConfigFile, resolveAppPaths } from "../config/paths.ts";
 import { runCommand } from "./run.ts";
+import { sessionsCommand } from "./sessions.ts";
 
 const EXIT_OK = 0;
 const EXIT_ERROR = 1;
@@ -85,11 +86,16 @@ export async function main(argv: string[]): Promise<number> {
         env: process.env,
         stdout: process.stdout,
         stderr: process.stderr,
+        version: pkg.version,
       });
     case "init":
       return notImplemented(command);
     case "sessions":
-      return notImplemented("sessions");
+      return sessionsCommand(rest, {
+        cwd: process.cwd(),
+        stdout: process.stdout,
+        stderr: process.stderr,
+      });
     case "config":
       return configCommand(rest);
     default:

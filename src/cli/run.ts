@@ -1,23 +1,32 @@
-import { readFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { loadConfig } from "../config/load.ts";
+import { sessionDirFor } from "../config/paths.ts";
 import type { Config, PermissionMode, PermissionRule } from "../config/schema.ts";
 import { toHarnessError } from "../core/errors.ts";
 import { runAgent, type RunEvent } from "../core/loop.ts";
+import type { Message } from "../core/types.ts";
 import { createPermissionEngine } from "../permissions/engine.ts";
 import { parseRuleString } from "../permissions/rules.ts";
 import { OpenAiCompatProvider } from "../providers/openai-compat.ts";
+import { deriveMessages } from "../session/derive.ts";
+import { openSession, sessionPath, type SessionLog } from "../session/log.ts";
+import { parseRecords } from "../session/records.ts";
 import { createRegistry } from "../tools/registry.ts";
 import { defaultTools } from "../tools/index.ts";
+import { createStreamJsonRenderer, type ResultSummary } from "./render/stream-json.ts";
 
 export interface RunIo {
   cwd: string;
   env: NodeJS.ProcessEnv;
   stdout: NodeJS.WritableStream;
   stderr: NodeJS.WritableStream;
+  version: string;
 }
 
 const MODES: ReadonlySet<string> = new Set(["default", "plan", "unattended"]);
+const FORMATS: ReadonlySet<string> = new Set(["text", "json", "stream-json"]);
 
 function readPrompt(positionals: string[]): string {
   const joined = positionals.join(" ").trim();
@@ -34,6 +43,17 @@ function summarize(event: Extract<RunEvent, { type: "tool-call" }>): string {
     }
   }
   return event.name;
+}
+
+function newSessionId(): string {
+  return `s_${Date.now().toString(36)}_${randomBytes(3).toString("hex")}`;
+}
+
+interface SessionSetup {
+  id: string;
+  log: SessionLog;
+  history: Message[] | undefined;
+  turn: number;
 }
 
 export async function runCommand(argv: string[], io: RunIo): Promise<number> {
@@ -54,6 +74,8 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       allow: { type: "string", multiple: true },
       deny: { type: "string", multiple: true },
       "output-format": { type: "string" },
+      resume: { type: "string" },
+      fork: { type: "string" },
       verbose: { type: "boolean" },
     },
   });
@@ -63,8 +85,14 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
     io.stderr.write("usage: altiora run <prompt> [options]\n");
     return 2;
   }
-  if (values["output-format"] !== undefined && values["output-format"] !== "text") {
-    io.stderr.write(`unsupported output format: ${String(values["output-format"])}\n`);
+
+  const format = typeof values["output-format"] === "string" ? values["output-format"] : "text";
+  if (!FORMATS.has(format)) {
+    io.stderr.write(`unsupported output format: ${format}\n`);
+    return 2;
+  }
+  if (values.resume !== undefined && values.fork !== undefined) {
+    io.stderr.write("--resume and --fork cannot be used together\n");
     return 2;
   }
 
@@ -107,6 +135,19 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
     return 1;
   }
 
+  const sessionDir = sessionDirFor(io.cwd);
+  mkdirSync(sessionDir, { recursive: true });
+  let session: SessionSetup;
+  try {
+    session = prepareSession(sessionDir, io, config, {
+      resumeId: typeof values.resume === "string" ? values.resume : undefined,
+      forkId: typeof values.fork === "string" ? values.fork : undefined,
+    });
+  } catch (error) {
+    io.stderr.write(`${(error as Error).message}\n`);
+    return 1;
+  }
+
   const rules: PermissionRule[] = [...config.permissions.rules];
   const allowRules = Array.isArray(values.allow)
     ? values.allow.filter((value): value is string => typeof value === "string")
@@ -130,12 +171,32 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
   });
   const provider = new OpenAiCompatProvider({ baseUrl: config.baseUrl, apiKey });
 
+  const streamJson =
+    format === "stream-json"
+      ? createStreamJsonRenderer(
+          (value) => io.stdout.write(`${JSON.stringify(value)}\n`),
+          {
+            sessionId: session.id,
+            model: config.model,
+            cwd: io.cwd,
+            tools: registry.names(),
+            permissionMode: mode,
+            version: io.version,
+          },
+        )
+      : undefined;
+  streamJson?.init();
+
   const controller = new AbortController();
   const onInterrupt = (): void => controller.abort();
   process.once("SIGINT", onInterrupt);
 
-  let wroteText = false;
   const verbose = values.verbose === true;
+  const startedAt = Date.now();
+  let steps = 0;
+  let wroteText = false;
+
+  const usage = { inputTokens: 0, outputTokens: 0 };
 
   try {
     const result = await runAgent(prompt, {
@@ -151,36 +212,140 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       maxOutputChars: config.maxOutputChars,
       bash: config.tools.bash,
       retry: config.retry,
+      ...(session.history === undefined ? {} : { history: session.history }),
+      turn: session.turn,
+      log: session.log,
       onEvent: (event) => {
-        if (event.type === "text-delta") {
+        if (event.type === "step-start") {
+          steps += 1;
+          if (verbose && format === "text") io.stderr.write(`[step ${event.step + 1}]\n`);
+        } else if (event.type === "text-delta") {
           wroteText = true;
-          io.stdout.write(event.text);
+          if (format === "text") io.stdout.write(event.text);
         } else if (event.type === "tool-call") {
-          io.stderr.write(`[${summarize(event)}]\n`);
+          if (format === "text") io.stderr.write(`[${summarize(event)}]\n`);
         } else if (event.type === "tool-result" && event.isError) {
-          io.stderr.write(`[${event.name}] ${event.output.split("\n")[0]}\n`);
-        } else if (verbose && event.type === "step-start") {
-          io.stderr.write(`[step ${event.step + 1}]\n`);
+          if (format === "text") io.stderr.write(`[${event.name}] ${event.output.split("\n")[0]}\n`);
         }
+        streamJson?.event(event);
       },
     });
 
-    if (wroteText) io.stdout.write("\n");
-    if (verbose) {
-      io.stderr.write(
-        `[usage] input=${result.usage.inputTokens} output=${result.usage.outputTokens} stop=${result.stopReason}\n`,
+    usage.inputTokens = result.usage.inputTokens;
+    usage.outputTokens = result.usage.outputTokens;
+
+    const summary: ResultSummary = {
+      text: result.text,
+      isError: result.stopReason !== "completed",
+      stopReason: result.stopReason,
+      durationMs: Date.now() - startedAt,
+      steps,
+      usage,
+    };
+
+    if (format === "stream-json") {
+      streamJson?.result(summary);
+    } else if (format === "json") {
+      io.stdout.write(
+        `${JSON.stringify({
+          type: "result",
+          subtype:
+            result.stopReason === "completed"
+              ? "success"
+              : result.stopReason === "max_steps"
+                ? "error_max_steps"
+                : result.stopReason === "loop_detected"
+                  ? "error_loop"
+                  : "error_provider",
+          is_error: summary.isError,
+          duration_ms: summary.durationMs,
+          num_steps: steps,
+          usage: { input_tokens: usage.inputTokens, output_tokens: usage.outputTokens },
+          result: result.text,
+          session_id: session.id,
+        })}\n`,
       );
+    } else {
+      if (wroteText) io.stdout.write("\n");
+      if (verbose) {
+        io.stderr.write(
+          `[usage] input=${usage.inputTokens} output=${usage.outputTokens} stop=${result.stopReason} session=${session.id}\n`,
+        );
+      }
     }
+
     if (result.stopReason === "max_steps" || result.stopReason === "loop_detected") {
-      io.stderr.write(`stopped: ${result.stopReason}\n`);
+      if (format === "text") io.stderr.write(`stopped: ${result.stopReason}\n`);
       return 4;
     }
     return 0;
   } catch (error) {
     const failure = toHarnessError(error, "provider");
+    streamJson?.result({
+      text: "",
+      isError: true,
+      stopReason: "failed",
+      durationMs: Date.now() - startedAt,
+      steps,
+      usage,
+    });
     io.stderr.write(`${failure.message}\n`);
     return failure.code === "aborted" ? 130 : 1;
   } finally {
     process.removeListener("SIGINT", onInterrupt);
   }
+}
+
+function prepareSession(
+  directory: string,
+  io: RunIo,
+  config: Config,
+  ids: { resumeId: string | undefined; forkId: string | undefined },
+): SessionSetup {
+  const start = (id: string): SessionSetup => {
+    const log = openSession(directory, id);
+    if (log.records().length === 0) {
+      log.append({
+        t: "session/start",
+        id,
+        cwd: io.cwd,
+        model: config.model,
+        provider: "openai-compat",
+        harnessVersion: io.version,
+      });
+    }
+    return { id, log, history: undefined, turn: 1 };
+  };
+
+  if (ids.resumeId === undefined && ids.forkId === undefined) return start(newSessionId());
+
+  const sourceId = ids.resumeId ?? ids.forkId!;
+  const sourcePath = sessionPath(directory, sourceId);
+  let raw: string;
+  try {
+    raw = readFileSync(sourcePath, "utf8");
+  } catch {
+    throw new Error(`session not found: ${sourceId}`);
+  }
+  const records = parseRecords(raw);
+  const history = deriveMessages(records).messages;
+  const turn = records.filter((record) => record.t === "turn/start").length + 1;
+
+  if (ids.forkId === undefined) {
+    return { id: sourceId, log: openSession(directory, sourceId), history, turn };
+  }
+
+  const id = newSessionId();
+  const header = JSON.stringify({
+    v: 1,
+    ts: Date.now(),
+    t: "session/start",
+    id,
+    cwd: io.cwd,
+    model: config.model,
+    provider: "openai-compat",
+    harnessVersion: io.version,
+  });
+  writeFileSync(sessionPath(directory, id), `${header}\n${raw}`, "utf8");
+  return { id, log: openSession(directory, id), history, turn };
 }

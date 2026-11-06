@@ -42,4 +42,4 @@ npm run build
 
 ## Status
 
-M2 complete: the agent loop runs up to `maxSteps` with eight tools (`read`, `write`, `edit`, `bash`, `glob`, `grep`, `ls`, `todo_write`), a permission engine with `deny -> ask -> allow`, workspace path containment, and output truncation. Sessions and compaction are not implemented yet.
+M3 complete: append-only JSONL sessions with `deriveMessages` projection, resume/fork, `sessions list|show`, and `text|json|stream-json` output. Compaction and AGENTS.md memory are not implemented yet.
