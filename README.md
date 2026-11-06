@@ -6,7 +6,7 @@ A headless-first coding agent harness.
 
 Altiora runs a model against a real working directory: it streams a turn, executes tools, enforces permissions, and records everything in an append-only session log that can be resumed, forked, or replayed.
 
-Status: **M4 complete**. Project instructions are loaded from `AGENTS.md`, token usage is estimated and calibrated, and long conversations compact automatically into a summary plus a verbatim tail. Subagents and web fetch are next.
+Status: **M5 complete**. Ten tools including subagents and a guarded web fetch, project init, and a verified offline package. The interactive TUI is the remaining milestone.
 
 ## Why another harness
 
@@ -35,6 +35,10 @@ altiora run "fix the failing test" --model deepseek-chat \
 ```
 
 Rules use `tool(pattern)` syntax and are evaluated deny first, then ask, then allow. Read-only tools are allowed by default; `--permission-mode unattended` turns every unmatched `ask` into `deny`, and `--permission-mode plan` blocks all writes. Paths are resolved and rejected when they leave the workspace.
+
+`task` runs a subagent with a fresh context and a tool set without `task` itself, so subagents cannot nest. `webfetch` only accepts public http(s) URLs: loopback, private, link-local and metadata addresses are rejected, redirects are re-checked, and responses are capped at 5 MB.
+
+`altiora init` writes `.altiora/config.json` and an `AGENTS.md` stub for a new project.
 
 Configuration resolves from CLI flags over `ALTIORA_*` environment variables over the project config in `.altiora/config.json` (only when trusted) over the user config printed by `altiora config path`.
 
@@ -95,3 +99,5 @@ Published as `altiora-agent`; the command is `altiora`.
 ## License
 
 Apache-2.0
+
+Releasing is documented in [RELEASING.md](RELEASING.md).

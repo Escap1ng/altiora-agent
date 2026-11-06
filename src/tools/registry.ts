@@ -14,6 +14,9 @@ export interface ToolContext {
   maxOutputChars: number;
   bash: ToolsConfig["bash"];
   todos: TodoItem[];
+  fetchImpl?: typeof fetch;
+  lookupHost?: (host: string) => Promise<string[]>;
+  runSubagent?: (prompt: string) => Promise<{ text: string; isError: boolean }>;
 }
 
 export interface ToolResult {

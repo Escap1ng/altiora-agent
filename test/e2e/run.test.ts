@@ -320,3 +320,21 @@ test("prints a single json result object", async () => {
     await server.close();
   }
 });
+
+test("init writes project config and AGENTS.md once", async () => {
+  const cwd = await workspace();
+
+  const first = await runCli(["init"], { cwd, env: envFor(cwd) });
+  assert.equal(first.code, 0);
+  assert.match(first.stdout, /wrote/);
+  assert.equal(existsSync(join(cwd, ".altiora", "config.json")), true);
+  assert.equal(existsSync(join(cwd, "AGENTS.md")), true);
+
+  const config = JSON.parse(await readFile(join(cwd, ".altiora", "config.json"), "utf8")) as {
+    permissions: { mode: string };
+  };
+  assert.equal(config.permissions.mode, "default");
+
+  const second = await runCli(["init"], { cwd, env: envFor(cwd) });
+  assert.match(second.stdout, /nothing to write/);
+});

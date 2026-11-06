@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { projectConfigFile, resolveAppPaths } from "../config/paths.ts";
+import { initCommand } from "./init.ts";
 import { runCommand } from "./run.ts";
 import { sessionsCommand } from "./sessions.ts";
 
@@ -89,7 +90,11 @@ export async function main(argv: string[]): Promise<number> {
         version: pkg.version,
       });
     case "init":
-      return notImplemented(command);
+      return initCommand(rest, {
+        cwd: process.cwd(),
+        stdout: process.stdout,
+        stderr: process.stderr,
+      });
     case "sessions":
       return sessionsCommand(rest, {
         cwd: process.cwd(),

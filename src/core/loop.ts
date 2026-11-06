@@ -39,6 +39,7 @@ export interface LoopOptions {
   compaction?: CompactionConfig;
   contextWindow?: number;
   reserveOutputTokens?: number;
+  runSubagent?: (prompt: string) => Promise<{ text: string; isError: boolean }>;
   log?: SessionLog;
   onEvent?: (event: RunEvent) => void;
 }
@@ -256,6 +257,7 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
     maxOutputChars: options.maxOutputChars,
     bash: options.bash,
     todos: [],
+    ...(options.runSubagent === undefined ? {} : { runSubagent: options.runSubagent }),
   };
   const declarations = options.registry.declarations();
   const repeated = new Map<string, number>();

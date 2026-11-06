@@ -1,10 +1,27 @@
 {
   "name": "altiora-agent",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "Altiora - a headless-first coding agent harness.",
   "license": "Apache-2.0",
+  "keywords": [
+    "coding-agent",
+    "agent-harness",
+    "cli",
+    "llm",
+    "openai-compatible"
+  ],
+  "homepage": "https://github.com/Escap1ng/altiora-agent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Escap1ng/altiora-agent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Escap1ng/altiora-agent/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "engines": {
     "node": ">=22.18"
   },

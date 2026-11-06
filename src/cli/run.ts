@@ -166,6 +166,7 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
   }
 
   const registry = createRegistry(defaultTools());
+  const subagentRegistry = createRegistry(defaultTools().filter((tool) => tool.name !== "task"));
   const permissions = createPermissionEngine({
     mode,
     rules,
@@ -186,6 +187,26 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
     memory: memory.text,
   });
   const estimator = new TokenEstimator();
+  const controller = new AbortController();
+
+  const runSubagent = async (prompt: string): Promise<{ text: string; isError: boolean }> => {
+    const result = await runAgent(prompt, {
+      provider,
+      registry: subagentRegistry,
+      permissions,
+      model: config.model,
+      cwd: io.cwd,
+      platform: process.platform,
+      signal: controller.signal,
+      maxSteps: Math.min(config.maxSteps, 20),
+      maxToolCallsPerStep: config.maxToolCallsPerStep,
+      maxOutputChars: config.maxOutputChars,
+      bash: config.tools.bash,
+      retry: config.retry,
+      systemPrompt,
+    });
+    return { text: result.text, isError: result.stopReason !== "completed" };
+  };
 
   const streamJson =
     format === "stream-json"
@@ -203,7 +224,6 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       : undefined;
   streamJson?.init();
 
-  const controller = new AbortController();
   const onInterrupt = (): void => controller.abort();
   process.once("SIGINT", onInterrupt);
 
@@ -236,6 +256,7 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       compaction: config.compaction,
       contextWindow: config.contextWindow,
       reserveOutputTokens: config.reserveOutputTokens,
+      runSubagent,
       onEvent: (event) => {
         if (event.type === "step-start") {
           steps += 1;

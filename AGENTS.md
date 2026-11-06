@@ -42,4 +42,4 @@ npm run build
 
 ## Status
 
-M4 complete: token estimation with usage calibration, hierarchical AGENTS.md memory with `@imports`, and automatic compaction recorded as a session event with a verbatim tail. Subagents, web fetch and release tooling are not implemented yet.
+M5 complete: ten tools including `task` (non-recursive subagents) and `webfetch` (SSRF guard, 5 MB cap), `altiora init`, release metadata, and a verified offline package install. The interactive TUI is not implemented yet.
