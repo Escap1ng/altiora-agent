@@ -300,6 +300,51 @@ test("forks a session into a new log without touching the source", async () => {
   }
 });
 
+test("retries a connection reset transparently in a headless run", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer((_request, index) =>
+    index === 0 ? { destroy: true } : {
+      chunks: sseChunks([{ choices: [{ delta: { content: "survived" }, finish_reason: "stop" }] }]),
+    },
+  );
+  try {
+    const result = await runCli(["run", "hi", "--base-url", server.url, "--model", "m"], {
+      cwd,
+      env: envFor(cwd),
+    });
+
+    assert.equal(result.code, 0);
+    assert.equal(result.stdout, "survived\n");
+    assert.equal(server.requests.length, 2);
+  } finally {
+    await server.close();
+  }
+});
+
+test("fails cleanly when the stream breaks mid-response", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer(() => ({
+    chunks: sseChunks([{ choices: [{ delta: { content: "Hel" } }] }]),
+    destroy: { afterChunks: 1 },
+  }));
+  try {
+    const result = await runCli(["run", "hi", "--base-url", server.url, "--model", "m"], {
+      cwd,
+      env: envFor(cwd),
+    });
+
+    assert.equal(result.code, 1);
+    assert.match(result.stdout, /Hel/);
+    assert.notEqual(result.stderr, "");
+
+    const list = await runCli(["sessions", "list", "--json"], { cwd, env: envFor(cwd) });
+    const sessions = JSON.parse(list.stdout) as { id: string }[];
+    assert.equal(sessions.length, 1, "the failed turn must still leave a resumable session log");
+  } finally {
+    await server.close();
+  }
+});
+
 test("prints a single json result object", async () => {
   const cwd = await workspace();
   const server = await startMockServer(() => ({

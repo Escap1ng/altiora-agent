@@ -68,7 +68,8 @@ export class OpenAiCompatProvider implements Provider {
     }
 
     let finishReason: ProviderEvent | null = null;
-    for await (const data of parseSse(response.body)) {
+    try {
+      for await (const data of parseSse(response.body)) {
       if (data === "[DONE]") break;
       let chunk: WireChunk;
       try {
@@ -118,6 +119,10 @@ export class OpenAiCompatProvider implements Provider {
           },
         };
       }
+      }
+    } catch (error) {
+      if (error instanceof HarnessError) throw error;
+      throw toHarnessError(error, "network");
     }
 
     yield finishReason ?? { type: "finish", reason: "stop" };

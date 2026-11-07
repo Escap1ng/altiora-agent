@@ -6,6 +6,11 @@ export interface MockRequestRecord {
   body: Record<string, unknown> | null;
   headers: IncomingHttpHeaders;
   url: string;
+  at: number;
+}
+
+export interface MockDestroy {
+  afterChunks: number;
 }
 
 export interface MockResponse {
@@ -13,6 +18,7 @@ export interface MockResponse {
   headers?: Record<string, string>;
   chunks?: string[];
   body?: string;
+  destroy?: boolean | MockDestroy;
 }
 
 export type MockHandler = (request: MockRequestRecord, index: number) => MockResponse;
@@ -40,18 +46,32 @@ export async function startMockServer(handler: MockHandler): Promise<MockServer>
         body = null;
       }
     }
-    const record: MockRequestRecord = { body, headers: request.headers, url: request.url ?? "" };
+    const record: MockRequestRecord = { body, headers: request.headers, url: request.url ?? "", at: Date.now() };
     requests.push(record);
     const result = handler(record, requests.length - 1);
+    if (result.destroy === true) {
+      response.socket?.destroy();
+      return;
+    }
     response.writeHead(result.status ?? 200, {
       "content-type": "text/event-stream",
       ...result.headers,
     });
+    response.flushHeaders();
     if (result.body !== undefined) {
       response.end(result.body);
       return;
     }
-    for (const chunk of result.chunks ?? []) response.write(chunk);
+    const chunks = result.chunks ?? [];
+    const afterChunks =
+      typeof result.destroy === "object" && result.destroy !== null ? result.destroy.afterChunks : undefined;
+    if (typeof afterChunks === "number") {
+      for (const chunk of chunks.slice(0, afterChunks)) response.write(chunk);
+      await new Promise((resolve) => setTimeout(resolve, 30));
+      response.socket?.destroy();
+      return;
+    }
+    for (const chunk of chunks) response.write(chunk);
     response.end();
   });
 
