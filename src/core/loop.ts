@@ -1,12 +1,13 @@
 import type { CompactionConfig } from "../config/schema.ts";
-import type { PermissionEngine } from "../permissions/engine.ts";
-import { streamWithRetry, type RetryPolicy } from "../providers/retry.ts";
-import type { SessionLog } from "../session/log.ts";
-import type { ToolContext, ToolRegistry } from "../tools/registry.ts";
-import { compactMessages, shouldCompact } from "./compaction.ts";
-import { HarnessError } from "./errors.ts";
+import { runCompactionGate } from "./compaction-gate.ts";
 import { TokenEstimator } from "./tokens.ts";
-import type { Message, Part, Provider, ProviderRequest, Usage } from "./types.ts";
+import type { PermissionEngine } from "../permissions/engine.ts";
+import type { RetryPolicy } from "../providers/retry.ts";
+import type { SessionLog } from "../session/log.ts";
+import { collectStep } from "./step.ts";
+import { runTool } from "./tool-runner.ts";
+import type { ToolContext, ToolRegistry } from "../tools/registry.ts";
+import type { Message, Provider, ProviderRequest, Usage } from "./types.ts";
 
 export type StopReason = "completed" | "max_steps" | "loop_detected" | "failed";
 
@@ -56,211 +57,9 @@ export interface RunResult {
   stopReason: StopReason;
 }
 
-interface PendingCall {
-  id?: string;
-  name?: string;
-  arguments: string;
-}
-
-interface ToolCall {
-  id: string;
-  name: string;
-  input: unknown;
-  error?: string;
-}
-
-interface StepOutput {
-  parts: Part[];
-  text: string;
-  reasoning: string;
-  usage: Usage;
-  toolCalls: ToolCall[];
-}
-
-interface ToolOutcome {
-  output: string;
-  isError: boolean;
-  denied: boolean;
-  truncated: boolean;
-}
-
-async function collectStep(request: ProviderRequest, options: LoopOptions): Promise<StepOutput> {
-  const pending = new Map<number, PendingCall>();
-  let text = "";
-  let reasoning = "";
-  let usage: Usage = { inputTokens: 0, outputTokens: 0 };
-
-  for await (const event of streamWithRetry(options.provider, request, {
-    signal: options.signal,
-    policy: options.retry,
-  })) {
-    switch (event.type) {
-      case "text-delta":
-        text += event.text;
-        options.onEvent?.({ type: "text-delta", text: event.text });
-        break;
-      case "reasoning-delta":
-        reasoning += event.text;
-        options.onEvent?.({ type: "reasoning-delta", text: event.text });
-        break;
-      case "tool-call-delta": {
-        const call = pending.get(event.index) ?? { arguments: "" };
-        if (event.id !== undefined) call.id = event.id;
-        if (event.name !== undefined) call.name = event.name;
-        if (event.argsDelta !== undefined) call.arguments += event.argsDelta;
-        pending.set(event.index, call);
-        break;
-      }
-      case "usage":
-        usage = event.usage;
-        break;
-      case "finish":
-        break;
-    }
-  }
-
-  const parts: Part[] = [];
-  if (text !== "") parts.push({ type: "text", text });
-
-  const toolCalls: ToolCall[] = [];
-  for (const [index, call] of [...pending.entries()].sort(([left], [right]) => left - right)) {
-    if (call.name === undefined) continue;
-    const id = call.id ?? `call_${index}`;
-    if (call.arguments.trim() === "") {
-      toolCalls.push({ id, name: call.name, input: {} });
-      parts.push({ type: "tool_use", id, name: call.name, input: {} });
-      continue;
-    }
-    try {
-      const input: unknown = JSON.parse(call.arguments);
-      toolCalls.push({ id, name: call.name, input });
-      parts.push({ type: "tool_use", id, name: call.name, input });
-    } catch (error) {
-      toolCalls.push({
-        id,
-        name: call.name,
-        input: {},
-        error: `invalid tool arguments: ${(error as Error).message}`,
-      });
-    }
-  }
-
-  return { parts, text, reasoning, usage, toolCalls };
-}
-
-async function runTool(
-  call: ToolCall,
-  context: ToolContext,
-  options: LoopOptions,
-  step: number,
-): Promise<ToolOutcome> {
-  options.onEvent?.({ type: "tool-call", id: call.id, name: call.name, input: call.input });
-
-  const deny = (output: string): ToolOutcome => {
-    options.onEvent?.({
-      type: "tool-result",
-      id: call.id,
-      name: call.name,
-      output,
-      isError: true,
-      denied: true,
-    });
-    return { output, isError: true, denied: true, truncated: false };
-  };
-
-  const fail = (output: string): ToolOutcome => {
-    options.onEvent?.({
-      type: "tool-result",
-      id: call.id,
-      name: call.name,
-      output,
-      isError: true,
-      denied: false,
-    });
-    return { output, isError: true, denied: false, truncated: false };
-  };
-
-  if (call.error !== undefined) return fail(call.error);
-
-  const definition = options.registry.get(call.name);
-  if (definition === undefined) return fail(`unknown tool: ${call.name}`);
-
-  let input: unknown;
-  try {
-    input = definition.parse(call.input);
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : String(error));
-  }
-
-  let resources: string[];
-  try {
-    resources = definition.resources?.(input, context) ?? [];
-  } catch (error) {
-    return fail(error instanceof Error ? error.message : String(error));
-  }
-
-  const decision = options.permissions.decide({
-    tool: call.name,
-    resources,
-    readOnly: definition.readOnly === true,
-  });
-  options.log?.append({
-    t: "permission",
-    callId: call.id,
-    tool: call.name,
-    effect: decision.effect,
-    source: decision.ruleId === undefined ? "builtin" : "rule",
-    ...(decision.ruleId === undefined ? {} : { ruleId: decision.ruleId }),
-  });
-
-  if (decision.effect === "deny") return deny(`denied: ${decision.reason}`);
-  if (decision.effect === "ask") {
-    const approved =
-      options.confirm === undefined
-        ? false
-        : await options.confirm({ tool: call.name, resources, reason: decision.reason });
-    if (!approved) return deny(`denied: ${decision.reason} (not approved)`);
-  }
-
-  const started = Date.now();
-  try {
-    const result = await definition.execute(input, context);
-    options.log?.append({
-      t: "tool/result",
-      step,
-      callId: call.id,
-      status: result.isError ? "error" : "ok",
-      output: result.output,
-      truncated: result.truncated,
-      durationMs: Date.now() - started,
-    });
-    options.onEvent?.({
-      type: "tool-result",
-      id: call.id,
-      name: call.name,
-      output: result.output,
-      isError: result.isError,
-      denied: false,
-    });
-    return { output: result.output, isError: result.isError, denied: false, truncated: result.truncated };
-  } catch (error) {
-    const output = error instanceof HarnessError ? error.message : String(error);
-    options.log?.append({
-      t: "tool/result",
-      step,
-      callId: call.id,
-      status: "error",
-      output,
-      truncated: false,
-      durationMs: Date.now() - started,
-    });
-    return fail(output);
-  }
-}
-
 export async function runAgent(input: string, options: LoopOptions): Promise<RunResult> {
   const turn = options.turn ?? 1;
-  const messages: Message[] = [...(options.history ?? []), { role: "user", content: input }];
+  let messages: Message[] = [...(options.history ?? []), { role: "user", content: input }];
   const usage: Usage = { inputTokens: 0, outputTokens: 0 };
   const context: ToolContext = {
     cwd: options.cwd,
@@ -292,52 +91,32 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
       options.onEvent?.({ type: "step-start", step });
       options.log?.append({ t: "step/start", step });
 
-      let requestMessages: Message[] =
+      const initialRequestMessages: Message[] =
         options.systemPrompt === undefined
           ? messages
           : [{ role: "system", content: options.systemPrompt }, ...messages];
-      let estimated = estimator.estimateMessages(requestMessages);
 
-      if (
-        options.compaction !== undefined &&
-        !compacted &&
-        shouldCompact(
-          estimated,
-          options.compaction,
-          options.contextWindow ?? 128000,
-          options.reserveOutputTokens ?? 0,
-        )
-      ) {
-        const outcome = await compactMessages(messages, {
-          provider: options.provider,
-          model: options.model,
-          config: options.compaction,
-          estimator,
-          signal: options.signal,
-          policy: options.retry,
-        });
-        if (outcome !== null) {
-          messages.splice(0, messages.length, ...outcome.messages);
-          options.log?.append({
-            t: "compaction",
-            tokensBefore: outcome.tokensBefore,
-            tokensAfter: outcome.tokensAfter,
-            summary: outcome.summary,
-            keptMessages: outcome.kept,
-          });
-          options.onEvent?.({
-            type: "compaction",
-            tokensBefore: outcome.tokensBefore,
-            tokensAfter: outcome.tokensAfter,
-          });
-          compacted = true;
-          requestMessages =
-            options.systemPrompt === undefined
-              ? messages
-              : [{ role: "system", content: options.systemPrompt }, ...messages];
-          estimated = estimator.estimateMessages(requestMessages);
-        }
-      }
+      const gate = await runCompactionGate({
+        messages,
+        requestMessages: initialRequestMessages,
+        compacted,
+        compaction: options.compaction,
+        contextWindow: options.contextWindow ?? 128000,
+        reserveOutputTokens: options.reserveOutputTokens ?? 0,
+        systemPrompt: options.systemPrompt,
+        estimator,
+        provider: options.provider,
+        model: options.model,
+        retry: options.retry,
+        signal: options.signal,
+        ...(options.log === undefined ? {} : { log: options.log }),
+        ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
+      });
+      messages = gate.messages;
+      const requestMessages: Message[] = gate.requestMessages;
+      compacted = gate.compacted;
+
+      const estimated = estimator.estimateMessages(requestMessages);
 
       const request: ProviderRequest = {
         model: options.model,
@@ -345,7 +124,12 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
         ...(declarations.length === 0 ? {} : { tools: declarations }),
       };
 
-      const result = await collectStep(request, options);
+      const result = await collectStep(request, {
+        provider: options.provider,
+        retry: options.retry,
+        signal: options.signal,
+        ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
+      });
       if (result.usage.inputTokens > 0) estimator.observe(estimated, result.usage.inputTokens);
       usage.inputTokens += result.usage.inputTokens;
       usage.outputTokens += result.usage.outputTokens;
@@ -373,7 +157,18 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
 
       for (const call of result.toolCalls.slice(0, options.maxToolCallsPerStep)) {
         options.log?.append({ t: "tool/call", step, callId: call.id, name: call.name, input: call.input });
-        const outcome = await runTool(call, context, options, step);
+        const outcome = await runTool(
+          call,
+          context,
+          {
+            registry: options.registry,
+            permissions: options.permissions,
+            ...(options.confirm === undefined ? {} : { confirm: options.confirm }),
+            ...(options.log === undefined ? {} : { log: options.log }),
+            ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
+          },
+          step,
+        );
         messages.push({ role: "tool", toolCallId: call.id, output: outcome.output, isError: outcome.isError });
       }
       for (const skipped of result.toolCalls.slice(options.maxToolCallsPerStep)) {
