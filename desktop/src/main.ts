@@ -30,6 +30,7 @@ function createWindow(): void {
     minWidth: 900,
     minHeight: 560,
     title: "Altiora",
+    icon: join(root, "build", "icon.ico"),
     backgroundColor: "#f3f4f6",
     show: false,
     webPreferences: {
