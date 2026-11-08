@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:"
+    />
+    <title>Altiora</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="brand">
+          <span class="mark">A</span>
+          <span class="name">Altiora</span>
+        </div>
+        <button type="button" class="new-session" id="new-session">New session</button>
+        <div class="sidebar-label">Sessions</div>
+        <div class="sessions" id="sessions">
+          <div class="session-empty">No sessions yet</div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="titles">
+            <div class="session-title" id="session-title">New session</div>
+            <div class="workspace" id="workspace"></div>
+          </div>
+          <div class="status" id="status">
+            <span class="dot" id="status-dot"></span>
+            <span id="status-text">starting</span>
+          </div>
+        </header>
+
+        <section class="messages" id="messages">
+          <div class="empty">
+            <div class="empty-title">Ready when you are</div>
+            <div class="empty-body">Ask Altiora to inspect or change the workspace.</div>
+          </div>
+        </section>
+
+        <form class="composer" id="composer">
+          <textarea
+            id="prompt"
+            rows="3"
+            placeholder="Describe a task for Altiora"
+            spellcheck="false"
+          ></textarea>
+          <div class="composer-actions">
+            <span class="hint">Enter to send, Shift+Enter for a new line</span>
+            <div class="buttons">
+              <button type="button" class="ghost" id="abort" hidden>Stop</button>
+              <button type="submit" id="send">Send</button>
+            </div>
+          </div>
+        </form>
+      </main>
+    </div>
+
+    <div class="modal-backdrop" id="modal" hidden>
+      <div class="modal">
+        <div class="modal-title" id="modal-title">Allow tool?</div>
+        <div class="modal-body" id="modal-body"></div>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="deny">Deny</button>
+          <button type="button" id="approve">Approve</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
