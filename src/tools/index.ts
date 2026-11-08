@@ -1,3 +1,4 @@
+export { applyPatchTool } from "./apply-patch.ts";
 export { bashTool } from "./bash.ts";
 export { editTool } from "./edit.ts";
 export { globTool } from "./glob.ts";
@@ -9,6 +10,7 @@ export { todoTool } from "./todo.ts";
 export { webfetchTool } from "./webfetch.ts";
 export { writeTool } from "./write.ts";
 
+import { applyPatchTool } from "./apply-patch.ts";
 import { bashTool } from "./bash.ts";
 import { editTool } from "./edit.ts";
 import { globTool } from "./glob.ts";
@@ -22,5 +24,5 @@ import { writeTool } from "./write.ts";
 import type { ToolDefinition } from "./registry.ts";
 
 export function defaultTools(): ToolDefinition[] {
-  return [readTool, writeTool, editTool, bashTool, globTool, grepTool, lsTool, todoTool, webfetchTool, taskTool];
+  return [readTool, writeTool, editTool, applyPatchTool, bashTool, globTool, grepTool, lsTool, todoTool, webfetchTool, taskTool];
 }
