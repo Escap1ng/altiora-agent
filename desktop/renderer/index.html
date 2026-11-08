@@ -25,42 +25,93 @@
 
       <main class="main">
         <header class="topbar">
-          <div class="titles">
-            <div class="session-title" id="session-title">New session</div>
-            <div class="workspace-row">
-              <span class="workspace" id="workspace"></span>
-              <button type="button" class="link" id="pick-workspace">Change</button>
+          <div class="topbar-left">
+            <button
+              type="button"
+              class="icon-button"
+              id="toggle-sidebar"
+              title="Hide sidebar"
+              aria-label="Toggle sidebar"
+              aria-expanded="true"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="1.7" y="2.7" width="12.6" height="10.6" rx="2.4" stroke="currentColor" stroke-width="1.3" />
+                <path d="M6.2 2.7v10.6" stroke="currentColor" stroke-width="1.3" />
+              </svg>
+            </button>
+            <div class="titles">
+              <div class="session-title" id="session-title">New session</div>
+              <div class="workspace-row">
+                <span class="workspace" id="workspace"></span>
+                <button type="button" class="link" id="pick-workspace">Change</button>
+              </div>
             </div>
           </div>
-          <div class="status" id="status">
-            <span class="dot" id="status-dot"></span>
-            <span id="status-text">starting</span>
+          <div class="topbar-right">
+            <div class="status" id="status">
+              <span class="dot" id="status-dot"></span>
+              <span id="status-text">starting</span>
+            </div>
+            <button
+              type="button"
+              class="icon-button"
+              id="toggle-right"
+              title="Show files"
+              aria-label="Toggle files panel"
+              aria-expanded="false"
+            >
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                <rect x="1.7" y="2.7" width="12.6" height="10.6" rx="2.4" stroke="currentColor" stroke-width="1.3" />
+                <path d="M9.8 2.7v10.6" stroke="currentColor" stroke-width="1.3" />
+              </svg>
+            </button>
           </div>
         </header>
 
         <section class="messages" id="messages">
           <div class="empty">
+            <div class="empty-mark">A</div>
             <div class="empty-title">Ready when you are</div>
             <div class="empty-body">Ask Altiora to inspect or change the workspace.</div>
           </div>
         </section>
 
         <form class="composer" id="composer">
-          <textarea
-            id="prompt"
-            rows="3"
-            placeholder="Describe a task for Altiora"
-            spellcheck="false"
-          ></textarea>
-          <div class="composer-actions">
-            <span class="hint">Enter to send, Shift+Enter for a new line</span>
-            <div class="buttons">
-              <button type="button" class="ghost" id="abort" hidden>Stop</button>
-              <button type="submit" id="send">Send</button>
+          <div class="composer-card">
+            <textarea
+              id="prompt"
+              rows="3"
+              placeholder="Describe a task for Altiora"
+              spellcheck="false"
+            ></textarea>
+            <div class="composer-actions">
+              <span class="hint">Enter to send, Shift+Enter for a new line</span>
+              <div class="buttons">
+                <button type="button" class="ghost" id="abort" hidden>Stop</button>
+                <button type="submit" id="send">Send</button>
+              </div>
             </div>
           </div>
         </form>
       </main>
+
+      <aside class="rightbar" id="rightbar">
+        <div class="rightbar-head">
+          <span class="rightbar-title">Files</span>
+          <button type="button" class="link" id="refresh-tree">Refresh</button>
+        </div>
+        <div class="tree" id="tree"></div>
+      </aside>
+    </div>
+
+    <div class="modal-backdrop" id="preview" hidden>
+      <div class="modal preview-modal">
+        <div class="preview-head">
+          <span class="preview-path" id="preview-path"></span>
+          <button type="button" class="ghost" id="preview-close">Close</button>
+        </div>
+        <pre class="preview-body" id="preview-body"></pre>
+      </div>
     </div>
 
     <div class="modal-backdrop" id="modal" hidden>

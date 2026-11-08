@@ -1,5 +1,6 @@
-import { app, BrowserWindow, dialog, ipcMain } from "electron";
-import { dirname, join } from "node:path";
+import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
+import { readFile, readdir, stat } from "node:fs/promises";
+import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentService } from "./agent.js";
 
@@ -13,14 +14,23 @@ function send(channel: string, payload: unknown): void {
   if (window !== undefined && !window.isDestroyed()) window.webContents.send(channel, payload);
 }
 
+function workspacePath(target: string): { absolute: string } | undefined {
+  const root = service?.state().workspace;
+  if (root === undefined) return undefined;
+  const absolute = resolve(root, target);
+  const rel = relative(root, absolute);
+  if (rel.startsWith("..") || isAbsolute(rel)) return undefined;
+  return { absolute };
+}
+
 function createWindow(): void {
   window = new BrowserWindow({
-    width: 1120,
-    height: 780,
-    minWidth: 760,
-    minHeight: 520,
+    width: 1320,
+    height: 820,
+    minWidth: 900,
+    minHeight: 560,
     title: "Altiora",
-    backgroundColor: "#0e1116",
+    backgroundColor: "#f3f4f6",
     show: false,
     webPreferences: {
       preload: join(root, "preload.cjs"),
@@ -72,8 +82,7 @@ ipcMain.handle("altiora:new-session", () =>
   service === undefined ? { ok: false, message: startupError ?? "starting" } : service.newSession(),
 );
 
-ipcMain.handle("altiora:pick-workspace", async () => {
-  if (service?.isRunning() === true) return { ok: false, message: "stop the current turn first" };
+ipcMain.handle("altiora:pick-workspace", async () => {  if (service?.isRunning() === true) return { ok: false, message: "stop the current turn first" };
   const options: Electron.OpenDialogOptions = {
     title: "Choose a workspace",
     properties: ["openDirectory"],
@@ -100,6 +109,52 @@ ipcMain.handle("altiora:pick-workspace", async () => {
   }
 });
 
+ipcMain.handle("altiora:list-dir", async (_event, target: unknown) => {
+  if (service === undefined) return { ok: false, message: startupError ?? "starting" };
+  const relativePath = typeof target === "string" ? target : "";
+  const resolved = workspacePath(relativePath);
+  if (resolved === undefined) return { ok: false, message: "path escapes the workspace" };
+  try {
+    const dirents = await readdir(resolved.absolute, { withFileTypes: true });
+    const entries = dirents
+      .map((entry) => ({
+        name: entry.name,
+        path: relativePath === "" ? entry.name : `${relativePath}/${entry.name}`,
+        type: entry.isDirectory() ? "dir" : "file",
+      }))
+      .sort((left, right) =>
+        left.type === right.type
+          ? left.name.localeCompare(right.name)
+          : left.type === "dir"
+            ? -1
+            : 1,
+      )
+      .slice(0, 500);
+    return { ok: true, entries };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+});
+
+ipcMain.handle("altiora:read-file", async (_event, target: unknown) => {
+  if (service === undefined) return { ok: false, message: startupError ?? "starting" };
+  if (typeof target !== "string" || target === "") return { ok: false, message: "invalid file path" };
+  const resolved = workspacePath(target);
+  if (resolved === undefined) return { ok: false, message: "path escapes the workspace" };
+  try {
+    const info = await stat(resolved.absolute);
+    if (!info.isFile()) return { ok: false, message: "not a file" };
+    if (info.size > 512 * 1024) {
+      return { ok: false, message: `file is too large to preview (${info.size} bytes)` };
+    }
+    const buffer = await readFile(resolved.absolute);
+    if (buffer.includes(0)) return { ok: false, message: "binary file" };
+    return { ok: true, content: buffer.toString("utf8"), path: target };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+});
+
 ipcMain.handle("altiora:confirm-response", (_event, payload: unknown) => {
   if (typeof payload !== "object" || payload === null) return { ok: false };
   const record = payload as Record<string, unknown>;
@@ -110,6 +165,7 @@ ipcMain.handle("altiora:confirm-response", (_event, payload: unknown) => {
 });
 
 void app.whenReady().then(async () => {
+  if (process.platform !== "darwin") Menu.setApplicationMenu(null);
   createWindow();
 
   try {

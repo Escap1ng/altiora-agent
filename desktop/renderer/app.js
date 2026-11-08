@@ -1,5 +1,14 @@
 const api = window.altiora;
 
+const shellEl = document.querySelector(".shell");
+const toggleSidebarEl = document.querySelector("#toggle-sidebar");
+const toggleRightEl = document.querySelector("#toggle-right");
+const treeEl = document.querySelector("#tree");
+const refreshTreeEl = document.querySelector("#refresh-tree");
+const previewEl = document.querySelector("#preview");
+const previewPathEl = document.querySelector("#preview-path");
+const previewBodyEl = document.querySelector("#preview-body");
+const previewCloseEl = document.querySelector("#preview-close");
 const messagesEl = document.querySelector("#messages");
 const composerEl = document.querySelector("#composer");
 const promptEl = document.querySelector("#prompt");
@@ -25,6 +34,127 @@ let stepReasoning = null;
 let pendingConfirm = null;
 const toolRows = new Map();
 
+const SIDEBAR_KEY = "altiora.sidebar";
+const RIGHT_KEY = "altiora.rightPanel";
+let treeLoaded = false;
+
+function setSidebar(open) {
+  shellEl.classList.toggle("sidebar-collapsed", !open);
+  toggleSidebarEl.setAttribute("aria-expanded", String(open));
+  toggleSidebarEl.title = open ? "Hide sidebar" : "Show sidebar";
+  localStorage.setItem(SIDEBAR_KEY, open ? "open" : "collapsed");
+}
+
+function setRightPanel(open) {
+  shellEl.classList.toggle("right-open", open);
+  toggleRightEl.setAttribute("aria-expanded", String(open));
+  toggleRightEl.title = open ? "Hide files" : "Show files";
+  localStorage.setItem(RIGHT_KEY, open ? "open" : "closed");
+  if (open && !treeLoaded) void loadTree();
+}
+
+function treeNote(text) {
+  const note = document.createElement("div");
+  note.className = "tree-note";
+  note.textContent = text;
+  return note;
+}
+
+async function loadTree() {
+  treeLoaded = true;
+  treeEl.replaceChildren(treeNote("loading..."));
+  const result = await api.listDir("");
+  treeEl.replaceChildren();
+  if (!result.ok) {
+    treeEl.append(treeNote(result.message));
+    return;
+  }
+  if (result.entries.length === 0) {
+    treeEl.append(treeNote("empty workspace"));
+    return;
+  }
+  renderEntries(treeEl, result.entries, 0);
+}
+
+function renderEntries(container, entries, depth) {
+  for (const entry of entries) {
+    const item = document.createElement("div");
+    item.className = "tree-item";
+    const row = document.createElement("button");
+    row.type = "button";
+    row.className = `tree-row ${entry.type}`;
+    row.style.paddingLeft = `${8 + depth * 12}px`;
+    const marker = document.createElement("span");
+    marker.className = entry.type === "dir" ? "chevron" : "file-dot";
+    if (entry.type === "dir") marker.textContent = "▸";
+    const label = document.createElement("span");
+    label.className = "tree-label";
+    label.textContent = entry.name;
+    row.append(marker, label);
+
+    const children = document.createElement("div");
+    children.className = "tree-children";
+    children.hidden = true;
+    item.append(row, children);
+    container.append(item);
+
+    if (entry.type === "file") {
+      row.addEventListener("click", () => void openPreview(entry.path));
+      continue;
+    }
+
+    row.addEventListener("click", async () => {
+      if (children.dataset.loaded !== "1") {
+        const result = await api.listDir(entry.path);
+        children.replaceChildren();
+        if (!result.ok) children.append(treeNote(result.message));
+        else if (result.entries.length === 0) children.append(treeNote("empty"));
+        else renderEntries(children, result.entries, depth + 1);
+        children.dataset.loaded = "1";
+      }
+      children.hidden = !children.hidden;
+      marker.textContent = children.hidden ? "▸" : "▾";
+    });
+  }
+}
+
+function loadTreeIfOpen() {
+  if (shellEl.classList.contains("right-open")) return loadTree();
+  return Promise.resolve();
+}
+
+async function openPreview(path) {
+  const result = await api.readFile(path);
+  previewPathEl.textContent = path;
+  previewBodyEl.textContent = result.ok ? result.content : result.message;
+  previewEl.hidden = false;
+  previewCloseEl.focus();
+}
+
+function closePreview() {
+  previewEl.hidden = true;
+}
+
+setSidebar(localStorage.getItem(SIDEBAR_KEY) !== "collapsed");
+setRightPanel(localStorage.getItem(RIGHT_KEY) !== "closed");
+
+toggleSidebarEl.addEventListener("click", () => {
+  setSidebar(shellEl.classList.contains("sidebar-collapsed"));
+});
+
+toggleRightEl.addEventListener("click", () => {
+  setRightPanel(!shellEl.classList.contains("right-open"));
+});
+
+refreshTreeEl.addEventListener("click", () => {
+  void loadTree();
+});
+
+previewCloseEl.addEventListener("click", closePreview);
+previewEl.addEventListener("click", (event) => {
+  if (event.target === previewEl) closePreview();
+});
+
 function scrollDown() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
@@ -37,13 +167,16 @@ function restoreEmpty() {
   messagesEl.replaceChildren();
   const empty = document.createElement("div");
   empty.className = "empty";
+  const mark = document.createElement("div");
+  mark.className = "empty-mark";
+  mark.textContent = "A";
   const title = document.createElement("div");
   title.className = "empty-title";
   title.textContent = "Ready when you are";
   const body = document.createElement("div");
   body.className = "empty-body";
   body.textContent = "Ask Altiora to inspect or change the workspace.";
-  empty.append(title, body);
+  empty.append(mark, title, body);
   messagesEl.append(empty);
 }
 
@@ -322,7 +455,7 @@ async function refreshState() {
     setBusy(false);
     promptEl.disabled = true;
     sendEl.disabled = true;
-    addNotice(result.message, "error");
+    if (result.message !== "starting") addNotice(result.message, "error");
     return;
   }
   const state = result.state;
@@ -347,7 +480,7 @@ api.onReady((payload) => {
     sendEl.disabled = true;
     return;
   }
-  void refreshState();
+  void refreshState().then(() => loadTreeIfOpen());
 });
 api.onEvent(handleEvent);
 api.onFinish(handleFinish);
@@ -401,7 +534,9 @@ pickWorkspaceEl.addEventListener("click", async () => {
   resetStep();
   toolRows.clear();
   restoreEmpty();
+  treeLoaded = false;
   await refreshState();
+  await loadTreeIfOpen();
 });
 
 approveEl.addEventListener("click", () => closeConfirm(true));
@@ -415,6 +550,17 @@ promptEl.addEventListener("keydown", (event) => {
 });
 
 document.addEventListener("keydown", (event) => {
+  if (event.ctrlKey && event.key.toLowerCase() === "b") {
+    event.preventDefault();
+    if (event.shiftKey) setRightPanel(!shellEl.classList.contains("right-open"));
+    else setSidebar(shellEl.classList.contains("sidebar-collapsed"));
+    return;
+  }
+  if (!previewEl.hidden && event.key === "Escape") {
+    event.preventDefault();
+    closePreview();
+    return;
+  }
   if (modalEl.hidden) return;
   if (event.key === "Escape") {
     event.preventDefault();
@@ -425,4 +571,4 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-void refreshState();
+void refreshState().then(() => loadTreeIfOpen());
