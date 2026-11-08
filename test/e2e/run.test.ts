@@ -16,7 +16,14 @@ function envFor(cwd: string): NodeJS.ProcessEnv {
     ...process.env,
     ALTIORA_API_KEY: "test-key",
     ALTIORA_DATA_DIR: join(cwd, ".data"),
+    ALTIORA_CONTEXT_WINDOW: "128000",
   };
+}
+
+function autoEnv(cwd: string): NodeJS.ProcessEnv {
+  const env = envFor(cwd);
+  delete env.ALTIORA_CONTEXT_WINDOW;
+  return env;
 }
 
 after(async () => {
@@ -170,6 +177,75 @@ test("denies tools without a matching allow rule", async () => {
     const second = server.requests[1]?.body;
     const toolMessage = (second?.["messages"] as Record<string, unknown>[]).at(-1);
     assert.match(String(toolMessage?.["content"]), /denied/);
+  } finally {
+    await server.close();
+  }
+});
+
+test("detects the context window from the models endpoint", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer((request) => {
+    if (request.url === "/v1/models") {
+      return {
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ data: [{ id: "m", context_window: 1048576, max_output: 393216 }] }),
+      };
+    }
+    return { chunks: sseChunks([{ choices: [{ delta: { content: "hi" }, finish_reason: "stop" }] }]) };
+  });
+  try {
+    const result = await runCli(
+      ["run", "hello", "--base-url", server.url, "--model", "m", "--verbose"],
+      { cwd, env: autoEnv(cwd) },
+    );
+
+    assert.equal(result.code, 0);
+    assert.equal(result.stdout, "hi\n");
+    assert.match(result.stderr, /\[context\] window=1048576 source=models/);
+    assert.equal(server.requests[0]?.url, "/v1/models");
+    assert.equal(server.requests[1]?.url, "/v1/chat/completions");
+  } finally {
+    await server.close();
+  }
+});
+
+test("an explicit context window skips model discovery", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer(() => ({
+    chunks: sseChunks([{ choices: [{ delta: { content: "hi" }, finish_reason: "stop" }] }]),
+  }));
+  try {
+    const result = await runCli(
+      ["run", "hello", "--base-url", server.url, "--model", "m", "--context-window", "200000", "--verbose"],
+      { cwd, env: autoEnv(cwd) },
+    );
+
+    assert.equal(result.code, 0);
+    assert.equal(result.stdout, "hi\n");
+    assert.match(result.stderr, /\[context\] window=200000 source=config/);
+    assert.equal(server.requests.length, 1);
+    assert.equal(server.requests[0]?.url, "/v1/chat/completions");
+  } finally {
+    await server.close();
+  }
+});
+
+test("falls back to the default window when the endpoint has no model listing", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer((request) =>
+    request.url === "/v1/models"
+      ? { status: 404, body: "not found" }
+      : { chunks: sseChunks([{ choices: [{ delta: { content: "hi" }, finish_reason: "stop" }] }]) },
+  );
+  try {
+    const result = await runCli(
+      ["run", "hello", "--base-url", server.url, "--model", "m", "--verbose"],
+      { cwd, env: autoEnv(cwd) },
+    );
+
+    assert.equal(result.code, 0);
+    assert.equal(result.stdout, "hi\n");
+    assert.match(result.stderr, /\[context\] window=128000 source=fallback/);
   } finally {
     await server.close();
   }

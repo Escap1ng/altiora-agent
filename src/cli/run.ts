@@ -47,6 +47,7 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       temperature: { type: "string" },
       "max-output-tokens": { type: "string" },
       "max-steps": { type: "string" },
+      "context-window": { type: "string" },
       "permission-mode": { type: "string" },
       allow: { type: "string", multiple: true },
       deny: { type: "string", multiple: true },
@@ -73,13 +74,26 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
     return 2;
   }
 
-  const built = buildRuntime(
+  const built = await buildRuntime(
     { cwd: io.cwd, env: io.env, stderr: io.stderr, version: io.version },
     values,
   );
   if (!built.ok) return built.code;
-  const { config, mode, provider, registry, subagentRegistry, permissions, systemPrompt, estimator } =
-    built.runtime;
+  const {
+    config,
+    mode,
+    provider,
+    registry,
+    subagentRegistry,
+    permissions,
+    systemPrompt,
+    estimator,
+    contextWindow,
+    contextWindowSource,
+  } = built.runtime;
+  if (values.verbose === true) {
+    io.stderr.write(`[context] window=${contextWindow} source=${contextWindowSource}\n`);
+  }
 
   const sessionDir = sessionDirFor(io.cwd);
   mkdirSync(sessionDir, { recursive: true });
@@ -165,7 +179,7 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       systemPrompt,
       estimator,
       compaction: config.compaction,
-      contextWindow: config.contextWindow,
+      contextWindow: contextWindow,
       reserveOutputTokens: config.reserveOutputTokens,
       runSubagent,
       onEvent: (event) => {

@@ -28,6 +28,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
       "trust-project": { type: "boolean" },
       "api-key-env": { type: "string" },
       "max-steps": { type: "string" },
+      "context-window": { type: "string" },
       "permission-mode": { type: "string" },
       allow: { type: "string", multiple: true },
       deny: { type: "string", multiple: true },
@@ -35,13 +36,22 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
     },
   });
 
-  const built = buildRuntime(
+  const built = await buildRuntime(
     { cwd: io.cwd, env: io.env, stderr: io.stderr, version: io.version },
     values,
   );
   if (!built.ok) return built.code;
-  const { config, provider, registry, subagentRegistry, permissions, systemPrompt, estimator } =
-    built.runtime;
+  const {
+    config,
+    provider,
+    registry,
+    subagentRegistry,
+    permissions,
+    systemPrompt,
+    estimator,
+    contextWindow,
+    contextWindowSource,
+  } = built.runtime;
 
   const sessionDirectory = sessionDirFor(io.cwd);
   mkdirSync(sessionDirectory, { recursive: true });
@@ -75,7 +85,9 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
     rl.close();
   });
 
-  io.stdout.write(`Altiora interactive. Session ${session.id}. Type /help for commands.\n`);
+  io.stdout.write(
+    `Altiora interactive. Session ${session.id}. Window ${contextWindow} (${contextWindowSource}). Type /help for commands.\n`,
+  );
 
   let history: Message[] = session.history ?? [];
   let turn = session.turn;
@@ -135,7 +147,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
         systemPrompt,
         estimator,
         compaction: config.compaction,
-        contextWindow: config.contextWindow,
+        contextWindow: contextWindow,
         reserveOutputTokens: config.reserveOutputTokens,
         confirm,
         runSubagent: async (prompt: string) => {

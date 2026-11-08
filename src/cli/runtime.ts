@@ -3,12 +3,13 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { loadConfig } from "../config/load.ts";
 import { loadMemory } from "../config/memory.ts";
 import { resolveAppPaths } from "../config/paths.ts";
-import type { Config, PermissionMode, PermissionRule } from "../config/schema.ts";
+import { FALLBACK_CONTEXT_WINDOW, type Config, type PermissionMode, type PermissionRule } from "../config/schema.ts";
 import { buildSystemPrompt } from "../core/context.ts";
 import { TokenEstimator } from "../core/tokens.ts";
 import type { Message } from "../core/types.ts";
 import { createPermissionEngine, type PermissionEngine } from "../permissions/engine.ts";
 import { parseRuleString } from "../permissions/rules.ts";
+import { fetchModelLimits, type ModelLimits } from "../providers/models.ts";
 import { OpenAiCompatProvider } from "../providers/openai-compat.ts";
 import { deriveMessages } from "../session/derive.ts";
 import { openSession, sessionPath, type SessionLog } from "../session/log.ts";
@@ -32,13 +33,16 @@ export interface Runtime {
   permissions: PermissionEngine;
   systemPrompt: string;
   estimator: TokenEstimator;
+  contextWindow: number;
+  contextWindowSource: "config" | "models" | "fallback";
+  modelLimits: ModelLimits | undefined;
 }
 
 export type RuntimeResult = { ok: true; runtime: Runtime } | { ok: false; code: number };
 
 const MODES: ReadonlySet<string> = new Set(["default", "plan", "unattended"]);
 
-export function buildRuntime(io: RuntimeIo, values: Record<string, unknown>): RuntimeResult {
+export async function buildRuntime(io: RuntimeIo, values: Record<string, unknown>): Promise<RuntimeResult> {
   let mode: PermissionMode;
   const requestedMode = values["permission-mode"];
   if (requestedMode === undefined) {
@@ -59,6 +63,19 @@ export function buildRuntime(io: RuntimeIo, values: Record<string, unknown>): Ru
     overrides.maxOutputTokens = Number(values["max-output-tokens"]);
   }
   if (typeof values["max-steps"] === "string") overrides.maxSteps = Number(values["max-steps"]);
+  if (typeof values["context-window"] === "string") {
+    const raw = values["context-window"];
+    if (raw === "auto") {
+      overrides.contextWindow = "auto";
+    } else {
+      const window = Number(raw);
+      if (!Number.isInteger(window) || window <= 0) {
+        io.stderr.write(`context-window must be a positive integer or auto, got ${raw}\n`);
+        return { ok: false, code: 2 };
+      }
+      overrides.contextWindow = window;
+    }
+  }
 
   let loaded;
   try {
@@ -82,6 +99,23 @@ export function buildRuntime(io: RuntimeIo, values: Record<string, unknown>): Ru
   if (apiKey === undefined) {
     io.stderr.write(`missing api key: set ${config.apiKeyEnv}\n`);
     return { ok: false, code: 1 };
+  }
+
+  let contextWindow: number;
+  let contextWindowSource: Runtime["contextWindowSource"];
+  let modelLimits: ModelLimits | undefined;
+  if (config.contextWindow === "auto") {
+    modelLimits = await fetchModelLimits({ baseUrl: config.baseUrl, apiKey, model: config.model });
+    if (modelLimits?.contextWindow === undefined) {
+      contextWindow = FALLBACK_CONTEXT_WINDOW;
+      contextWindowSource = "fallback";
+    } else {
+      contextWindow = modelLimits.contextWindow;
+      contextWindowSource = "models";
+    }
+  } else {
+    contextWindow = config.contextWindow;
+    contextWindowSource = "config";
   }
 
   const rules: PermissionRule[] = [...config.permissions.rules];
@@ -118,7 +152,19 @@ export function buildRuntime(io: RuntimeIo, values: Record<string, unknown>): Ru
 
   return {
     ok: true,
-    runtime: { config, mode, provider, registry, subagentRegistry, permissions, systemPrompt, estimator },
+    runtime: {
+      config,
+      mode,
+      provider,
+      registry,
+      subagentRegistry,
+      permissions,
+      systemPrompt,
+      estimator,
+      contextWindow,
+      contextWindowSource,
+      modelLimits,
+    },
   };
 }
 

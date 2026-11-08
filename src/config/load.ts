@@ -69,6 +69,21 @@ function envOverrides(env: NodeJS.ProcessEnv): Partial<Config> {
     }
     overrides.maxSteps = steps;
   }
+  if (env.ALTIORA_CONTEXT_WINDOW) {
+    const raw = env.ALTIORA_CONTEXT_WINDOW;
+    if (raw === "auto") {
+      overrides.contextWindow = "auto";
+    } else {
+      const window = Number(raw);
+      if (!Number.isInteger(window) || window <= 0) {
+        throw new HarnessError(
+          `ALTIORA_CONTEXT_WINDOW must be a positive integer or auto, got ${raw}`,
+          { code: "config" },
+        );
+      }
+      overrides.contextWindow = window;
+    }
+  }
   return overrides;
 }
 

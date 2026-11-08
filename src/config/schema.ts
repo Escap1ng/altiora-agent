@@ -1,6 +1,9 @@
 export type PermissionEffect = "allow" | "ask" | "deny";
 export type PermissionMode = "default" | "plan" | "unattended";
 export type ShellChoice = "auto" | "pwsh" | "powershell" | "bash" | "sh";
+export type ContextWindow = number | "auto";
+
+export const FALLBACK_CONTEXT_WINDOW = 128000;
 
 export interface PermissionRule {
   tool: string;
@@ -44,7 +47,7 @@ export interface Config {
   maxSteps: number;
   maxToolCallsPerStep: number;
   maxOutputTokens: number;
-  contextWindow: number;
+  contextWindow: ContextWindow;
   reserveOutputTokens: number;
   maxOutputChars: number;
   temperature?: number;
@@ -63,7 +66,7 @@ export const DEFAULT_CONFIG: Config = {
   maxSteps: 40,
   maxToolCallsPerStep: 16,
   maxOutputTokens: 8192,
-  contextWindow: 128000,
+  contextWindow: "auto",
   reserveOutputTokens: 16000,
   maxOutputChars: 30000,
   tools: {
@@ -144,11 +147,15 @@ export function validateConfig(input: unknown): string[] {
   if (typeof input["baseUrl"] === "string" && !/^https?:\/\//.test(input["baseUrl"])) {
     problems.push("baseUrl must start with http:// or https://");
   }
-  for (const key of ["maxSteps", "maxToolCallsPerStep", "maxOutputTokens", "contextWindow", "maxOutputChars"] as const) {
+  for (const key of ["maxSteps", "maxToolCallsPerStep", "maxOutputTokens", "maxOutputChars"] as const) {
     const value = input[key];
     if (value !== undefined && !isPositiveInteger(value)) {
       problems.push(`${key} must be a positive integer`);
     }
+  }
+  const contextWindow = input["contextWindow"];
+  if (contextWindow !== undefined && contextWindow !== "auto" && !isPositiveInteger(contextWindow)) {
+    problems.push('contextWindow must be a positive integer or "auto"');
   }
 
   const tools = input["tools"];
