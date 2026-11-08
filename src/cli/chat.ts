@@ -2,9 +2,13 @@ import { mkdirSync } from "node:fs";
 import { createInterface } from "node:readline/promises";
 import { parseArgs } from "node:util";
 import { sessionDirFor } from "../config/paths.ts";
+import { FALLBACK_CONTEXT_WINDOW } from "../config/schema.ts";
+import { compactMessages, compactionThreshold } from "../core/compaction.ts";
 import { toHarnessError } from "../core/errors.ts";
 import { runAgent, type RunEvent } from "../core/loop.ts";
 import type { Message } from "../core/types.ts";
+import { fetchModelLimits } from "../providers/models.ts";
+import { computeStats } from "../session/stats.ts";
 import { buildRuntime, prepareSession, type SessionSetup } from "./runtime.ts";
 
 export interface ChatIo {
@@ -53,6 +57,10 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
     contextWindowSource,
   } = built.runtime;
 
+  let model = config.model;
+  let activeWindow = contextWindow;
+  let windowSource = contextWindowSource;
+
   const sessionDirectory = sessionDirFor(io.cwd);
   mkdirSync(sessionDirectory, { recursive: true });
 
@@ -60,7 +68,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
     prepareSession({
       directory: sessionDirectory,
       cwd: io.cwd,
-      model: config.model,
+      model,
       version: io.version,
       resumeId,
       forkId: undefined,
@@ -86,7 +94,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
   });
 
   io.stdout.write(
-    `Altiora interactive. Session ${session.id}. Window ${contextWindow} (${contextWindowSource}). Type /help for commands.\n`,
+    `Altiora interactive. Session ${session.id}. Window ${activeWindow} (${windowSource}). Type /help for commands.\n`,
   );
 
   let history: Message[] = session.history ?? [];
@@ -103,7 +111,75 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
     if (input === "") continue;
     if (input === "/exit" || input === "/quit") break;
     if (input === "/help") {
-      io.stdout.write("/new start a fresh session\n/exit quit\nanything else runs a turn\n");
+      io.stdout.write(
+        "/new start a fresh session\n" +
+          "/stats show session usage and context\n" +
+          "/compress summarize the conversation history\n" +
+          "/model [name] show or switch the model\n" +
+          "/exit quit\n" +
+          "anything else runs a turn\n",
+      );
+      continue;
+    }
+    if (input === "/stats") {
+      const stats = computeStats(session.log.records());
+      const estimated = estimator.estimateMessages(history);
+      const threshold = compactionThreshold(config.compaction, activeWindow, config.reserveOutputTokens);
+      io.stdout.write(
+        `turns=${stats.turns} steps=${stats.steps} input=${stats.inputTokens} output=${stats.outputTokens} cached=${stats.cachedInputTokens}\n` +
+          `tools=${stats.toolCalls} errors=${stats.toolErrors} denied=${stats.toolDenials} duration=${stats.toolDurationMs}ms compactions=${stats.compactions} permission_denials=${stats.permissionDenials}\n` +
+          `context=${estimated}/${activeWindow} threshold=${threshold} source=${windowSource}\n`,
+      );
+      continue;
+    }
+    if (input === "/compress") {
+      active = new AbortController();
+      const controller = active;
+      try {
+        const outcome = await compactMessages(history, {
+          provider,
+          model,
+          config: config.compaction,
+          estimator,
+          signal: controller.signal,
+          policy: config.retry,
+        });
+        if (outcome === null) {
+          io.stdout.write("nothing to compress\n");
+        } else {
+          session.log.append({
+            t: "compaction",
+            tokensBefore: outcome.tokensBefore,
+            tokensAfter: outcome.tokensAfter,
+            summary: outcome.summary,
+            keptMessages: outcome.kept,
+          });
+          history = outcome.messages;
+          io.stdout.write(`[compacted ${outcome.tokensBefore} -> ${outcome.tokensAfter} estimated tokens]\n`);
+        }
+      } catch (error) {
+        io.stderr.write(`${toHarnessError(error, "provider").message}\n`);
+      } finally {
+        active = undefined;
+      }
+      continue;
+    }
+    if (input === "/model" || input.startsWith("/model ")) {
+      const requested = input.slice("/model".length).trim();
+      if (requested === "") {
+        io.stdout.write(`model ${model} window=${activeWindow} (${windowSource})\n`);
+        continue;
+      }
+      model = requested;
+      if (config.contextWindow === "auto") {
+        const apiKey = io.env[config.apiKeyEnv];
+        const limits =
+          apiKey === undefined ? undefined : await fetchModelLimits({ baseUrl: config.baseUrl, apiKey, model });
+        activeWindow = limits?.contextWindow ?? FALLBACK_CONTEXT_WINDOW;
+        windowSource = limits?.contextWindow === undefined ? "fallback" : "models";
+      }
+      session.log.append({ t: "notice", level: "info", text: `model switched to ${model}` });
+      io.stdout.write(`model ${model} window=${activeWindow} (${windowSource})\n`);
       continue;
     }
     if (input === "/new") {
@@ -132,7 +208,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
         provider,
         registry,
         permissions,
-        model: config.model,
+        model,
         cwd: io.cwd,
         platform: process.platform,
         signal: controller.signal,
@@ -147,7 +223,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
         systemPrompt,
         estimator,
         compaction: config.compaction,
-        contextWindow: contextWindow,
+        contextWindow: activeWindow,
         reserveOutputTokens: config.reserveOutputTokens,
         confirm,
         runSubagent: async (prompt: string) => {
@@ -155,7 +231,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
             provider,
             registry: subagentRegistry,
             permissions,
-            model: config.model,
+            model,
             cwd: io.cwd,
             platform: process.platform,
             signal: controller.signal,

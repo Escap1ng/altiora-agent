@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { after, test } from "node:test";
@@ -460,6 +460,45 @@ test("init writes project config and AGENTS.md once", async () => {
   assert.match(second.stdout, /nothing to write/);
 });
 
+function runChat(args: string[], options: { cwd: string; env: NodeJS.ProcessEnv }, lines: string[]): Promise<CliResult> {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, [cli, "chat", ...args], {
+      cwd: options.cwd,
+      env: options.env,
+      stdio: ["pipe", "pipe", "pipe"],
+    });
+    let stdout = "";
+    let stderr = "";
+    let sent = 0;
+    const pump = (): void => {
+      const prompts = (stdout.match(/altiora> /g) ?? []).length;
+      while (sent < lines.length && prompts > sent) {
+        child.stdin.write(`${lines[sent]}\n`);
+        sent += 1;
+      }
+    };
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error("chat did not exit in time"));
+    }, 20000);
+    child.stdout.on("data", (chunk: Buffer) => {
+      stdout += chunk.toString();
+      pump();
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      stderr += chunk.toString();
+    });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      resolve({ code, stdout, stderr });
+    });
+  });
+}
+
 test("chat streams a turn and exits on /exit", async () => {
   const cwd = await workspace();
   const server = await startMockServer(() => ({
@@ -467,39 +506,82 @@ test("chat streams a turn and exits on /exit", async () => {
   }));
 
   try {
-    const result = await new Promise<CliResult>((resolve, reject) => {
-      const child = spawn(process.execPath, [cli, "chat", "--base-url", server.url, "--model", "m"], {
-        cwd,
-        env: envFor(cwd),
-        stdio: ["pipe", "pipe", "pipe"],
-      });
-      let stdout = "";
-      let stderr = "";
-      const timer = setTimeout(() => {
-        child.kill();
-        reject(new Error("chat did not exit in time"));
-      }, 20000);
-      child.stdout.on("data", (chunk: Buffer) => {
-        stdout += chunk.toString();
-      });
-      child.stderr.on("data", (chunk: Buffer) => {
-        stderr += chunk.toString();
-      });
-      child.on("error", (error) => {
-        clearTimeout(timer);
-        reject(error);
-      });
-      child.on("close", (code) => {
-        clearTimeout(timer);
-        resolve({ code, stdout, stderr });
-      });
-      child.stdin.write("hi\n/exit\n");
-      child.stdin.end();
-    });
+    const result = await runChat(
+      ["--base-url", server.url, "--model", "m"],
+      { cwd, env: envFor(cwd) },
+      ["hi", "/exit"],
+    );
 
     assert.equal(result.code, 0);
     assert.match(result.stdout, /hello from chat/);
     assert.equal(server.requests.length, 1);
+  } finally {
+    await server.close();
+  }
+});
+
+test("chat reports stats and switches models", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer(() => ({
+    chunks: sseChunks([{ choices: [{ delta: { content: "hello" }, finish_reason: "stop" }] }]),
+  }));
+
+  try {
+    const result = await runChat(
+      ["--base-url", server.url, "--model", "m"],
+      { cwd, env: envFor(cwd) },
+      ["hi", "/stats", "/model other", "/model", "/stats", "/exit"],
+    );
+
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /turns=1 steps=1 /);
+    assert.match(result.stdout, /tools=0 errors=0 denied=0 /);
+    assert.match(result.stdout, /context=\d+\/128000 threshold=95200 source=config/);
+    assert.match(result.stdout, /model other window=128000 \(config\)/);
+    assert.equal(server.requests.length, 1);
+  } finally {
+    await server.close();
+  }
+});
+
+test("chat compresses history on /compress and keeps it on the next turn", async () => {
+  const cwd = await workspace();
+  const configDir = join(cwd, ".cfg");
+  await mkdir(configDir, { recursive: true });
+  await writeFile(
+    join(configDir, "config.json"),
+    JSON.stringify({ compaction: { keepTailTokens: 1 } }),
+    "utf8",
+  );
+
+  let turns = 0;
+  const server = await startMockServer((request) => {
+    const messages = request.body?.["messages"] as { role: string; content: unknown }[] | undefined;
+    const first = messages?.[0];
+    if (typeof first?.content === "string" && first.content.includes("Summarize the conversation below")) {
+      return { chunks: sseChunks([{ choices: [{ delta: { content: "earlier work" }, finish_reason: "stop" }] }]) };
+    }
+    turns += 1;
+    return { chunks: sseChunks([{ choices: [{ delta: { content: `turn ${turns}` }, finish_reason: "stop" }] }]) };
+  });
+
+  try {
+    const env = { ...envFor(cwd), ALTIORA_CONFIG_DIR: configDir };
+    const result = await runChat(
+      ["--base-url", server.url, "--model", "m"],
+      { cwd, env },
+      ["one", "two", "/compress", "three", "/exit"],
+    );
+
+    assert.equal(result.code, 0);
+    assert.match(result.stdout, /\[compacted \d+ -> \d+ estimated tokens\]/);
+    assert.equal(server.requests.length, 4);
+
+    const last = server.requests.at(-1)?.body?.["messages"] as { role: string; content: unknown }[];
+    assert.equal(last[0]?.role, "system");
+    assert.equal(last[1]?.content, "Summary of earlier conversation:\nearlier work");
+    assert.equal(last[2]?.content, "two");
+    assert.equal(last.at(-1)?.content, "three");
   } finally {
     await server.close();
   }
