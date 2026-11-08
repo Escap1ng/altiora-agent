@@ -4,11 +4,14 @@
   "private": true,
   "type": "module",
   "main": "dist/main.js",
+  "description": "Altiora desktop shell",
+  "author": "Escap1ng",
   "scripts": {
-    "prebuild": "npm --prefix .. run build",
+    "prebuild": "npm --prefix .. run build && node scripts/copy-core.mjs",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "node --test \"test/**/*.test.ts\"",
+    "package": "npm run build && electron-builder --win nsis",
     "start": "npm run build && electron ."
   },
   "devDependencies": {
@@ -16,5 +19,32 @@
     "electron": "^45.2.3",
     "electron-builder": "^26.18.0",
     "typescript": "^7.0.2"
+  },
+  "build": {
+    "appId": "dev.altiora.desktop",
+    "productName": "Altiora",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "core-dist/**/*",
+      "preload.cjs",
+      "renderer/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   }
 }

@@ -1,12 +1,12 @@
 import { mkdirSync } from "node:fs";
 import { Writable } from "node:stream";
-import { sessionDirFor, resolveAppPaths } from "../../dist/config/paths.js";
-import { buildRuntime, prepareSession, type Runtime, type SessionSetup } from "../../dist/cli/runtime.js";
-import { toHarnessError } from "../../dist/core/errors.js";
-import { runAgent, type RunEvent, type StopReason } from "../../dist/core/loop.js";
-import type { Message, Usage } from "../../dist/core/types.js";
-import { deriveMessages } from "../../dist/session/derive.js";
-import { listSessions, type SessionSummary } from "../../dist/session/store.js";
+import { sessionDirFor, resolveAppPaths } from "../core-dist/config/paths.js";
+import { buildRuntime, prepareSession, type Runtime, type SessionSetup } from "../core-dist/cli/runtime.js";
+import { toHarnessError } from "../core-dist/core/errors.js";
+import { runAgent, type RunEvent, type StopReason } from "../core-dist/core/loop.js";
+import type { Message, Usage } from "../core-dist/core/types.js";
+import { deriveMessages } from "../core-dist/session/derive.js";
+import { listSessions, type SessionSummary } from "../core-dist/session/store.js";
 
 export interface ReadyState {
   workspace: string;
@@ -97,6 +97,10 @@ export class AgentService {
       permissionMode: this.runtime.mode,
       version: this.options.version,
     };
+  }
+
+  isRunning(): boolean {
+    return this.running !== undefined;
   }
 
   sessions(): SessionSummary[] {

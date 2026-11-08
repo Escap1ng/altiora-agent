@@ -7,6 +7,7 @@ const sendEl = document.querySelector("#send");
 const abortEl = document.querySelector("#abort");
 const sessionsEl = document.querySelector("#sessions");
 const newSessionEl = document.querySelector("#new-session");
+const pickWorkspaceEl = document.querySelector("#pick-workspace");
 const sessionTitleEl = document.querySelector("#session-title");
 const workspaceEl = document.querySelector("#workspace");
 const statusDotEl = document.querySelector("#status-dot");
@@ -19,7 +20,8 @@ const denyEl = document.querySelector("#deny");
 
 let busy = false;
 let currentSessionId = "";
-let assistantBubble = null;
+let stepAssistant = null;
+let stepReasoning = null;
 let pendingConfirm = null;
 const toolRows = new Map();
 
@@ -95,19 +97,66 @@ function setBusy(value) {
   statusTextEl.textContent = value ? "running" : statusTextEl.dataset.idle ?? "idle";
 }
 
+function addReasoningBlock(open) {
+  removeEmpty();
+  const details = document.createElement("details");
+  details.className = "reasoning";
+  const summary = document.createElement("summary");
+  const body = document.createElement("div");
+  body.className = "reasoning-body";
+  details.append(summary, body);
+  messagesEl.append(details);
+
+  const block = { details, summary, body, text: "", touched: false };
+  summary.addEventListener("click", () => {
+    block.touched = true;
+  });
+  details.open = open;
+  scrollDown();
+  return block;
+}
+
+function setReasoningText(block, text) {
+  block.text = text;
+  block.body.textContent = text;
+  block.summary.textContent = `Thinking · ${text.length.toLocaleString()} chars`;
+  if (block.details.open) block.body.scrollTop = block.body.scrollHeight;
+}
+
+function collapseReasoning(block) {
+  if (block !== null && !block.touched) block.details.open = false;
+}
+
+function resetStep() {
+  stepAssistant = null;
+  stepReasoning = null;
+}
+
 function currentAssistant() {
-  if (assistantBubble === null) assistantBubble = addBubble("assistant");
-  return assistantBubble;
+  if (stepAssistant === null) stepAssistant = addBubble("assistant");
+  return stepAssistant;
 }
 
 function handleEvent(event) {
+  if (event.type === "step-start") {
+    resetStep();
+    return;
+  }
+  if (event.type === "reasoning-delta") {
+    if (stepReasoning === null) stepReasoning = addReasoningBlock(true);
+    setReasoningText(stepReasoning, stepReasoning.text + event.text);
+    scrollDown();
+    return;
+  }
   if (event.type === "text-delta") {
+    collapseReasoning(stepReasoning);
     const bubble = currentAssistant();
     bubble.body.textContent += event.text;
     scrollDown();
     return;
   }
   if (event.type === "tool-call") {
+    collapseReasoning(stepReasoning);
     toolRows.set(event.id, addToolRow(event.name, event.input));
     return;
   }
@@ -124,6 +173,10 @@ function handleEvent(event) {
     if (firstLine !== "") row.textContent += ` - ${firstLine}`;
     return;
   }
+  if (event.type === "step-end") {
+    collapseReasoning(stepReasoning);
+    return;
+  }
   if (event.type === "compaction") {
     addNotice(
       `compacted ${event.tokensBefore} -> ${event.tokensAfter} estimated tokens`,
@@ -132,14 +185,14 @@ function handleEvent(event) {
 }
 
 function handleFinish(payload) {
-  assistantBubble = null;
+  resetStep();
   setBusy(false);
   if (payload.stopReason !== "completed") addNotice(`stopped: ${payload.stopReason}`, "error");
   void refreshSessions();
 }
 
 function handleError(payload) {
-  assistantBubble = null;
+  resetStep();
   setBusy(false);
   if (payload.message !== "request aborted") addNotice(payload.message, "error");
   void refreshSessions();
@@ -222,6 +275,10 @@ function renderHistory(history) {
       continue;
     }
     if (message.role === "assistant") {
+      if (typeof message.reasoning === "string" && message.reasoning !== "") {
+        const block = addReasoningBlock(false);
+        setReasoningText(block, message.reasoning);
+      }
       const text = message.content
         .filter((part) => part.type === "text")
         .map((part) => part.text)
@@ -251,7 +308,7 @@ async function openSession(id) {
   }
   currentSessionId = result.sessionId;
   sessionTitleEl.textContent = `Session ${shortId(result.sessionId)}`;
-  assistantBubble = null;
+  resetStep();
   renderHistory(result.history);
   await refreshSessions();
 }
@@ -303,7 +360,7 @@ composerEl.addEventListener("submit", async (event) => {
   if (text === "" || busy) return;
   promptEl.value = "";
   addBubble("user", text);
-  assistantBubble = null;
+  resetStep();
   toolRows.clear();
   setBusy(true);
   const result = await api.run(text);
@@ -327,9 +384,24 @@ newSessionEl.addEventListener("click", async () => {
   }
   currentSessionId = result.sessionId;
   sessionTitleEl.textContent = `Session ${shortId(result.sessionId)}`;
-  assistantBubble = null;
+  resetStep();
   restoreEmpty();
   await refreshSessions();
+});
+
+pickWorkspaceEl.addEventListener("click", async () => {
+  if (busy) return;
+  const result = await api.pickWorkspace();
+  if (result.canceled) return;
+  if (!result.ok) {
+    addNotice(result.message, "error");
+    return;
+  }
+  currentSessionId = result.state.sessionId;
+  resetStep();
+  toolRows.clear();
+  restoreEmpty();
+  await refreshState();
 });
 
 approveEl.addEventListener("click", () => closeConfirm(true));

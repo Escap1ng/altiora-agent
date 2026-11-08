@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, dialog, ipcMain } from "electron";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentService } from "./agent.js";
@@ -71,6 +71,34 @@ ipcMain.handle("altiora:open-session", (_event, id: unknown) => {
 ipcMain.handle("altiora:new-session", () =>
   service === undefined ? { ok: false, message: startupError ?? "starting" } : service.newSession(),
 );
+
+ipcMain.handle("altiora:pick-workspace", async () => {
+  if (service?.isRunning() === true) return { ok: false, message: "stop the current turn first" };
+  const options: Electron.OpenDialogOptions = {
+    title: "Choose a workspace",
+    properties: ["openDirectory"],
+  };
+  const result =
+    window === undefined ? await dialog.showOpenDialog(options) : await dialog.showOpenDialog(window, options);
+  if (result.canceled) return { canceled: true };
+  const cwd = result.filePaths[0];
+  if (cwd === undefined) return { canceled: true };
+
+  try {
+    service?.abort();
+    service = await AgentService.create({
+      cwd,
+      env: process.env,
+      version: app.getVersion(),
+      send,
+    });
+    const state = service.state();
+    send("altiora:ready", state);
+    return { ok: true, state };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+});
 
 ipcMain.handle("altiora:confirm-response", (_event, payload: unknown) => {
   if (typeof payload !== "object" || payload === null) return { ok: false };

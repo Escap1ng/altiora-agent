@@ -131,6 +131,43 @@ test("denies a write when the confirmation is rejected", async () => {
   }
 });
 
+test("forwards reasoning deltas and replays them on resume", async () => {
+  const cwd = await workspace();
+  const server = await startMockServer(() => ({
+    chunks: sseChunks([
+      { choices: [{ delta: { reasoning_content: "thinking hard" } }] },
+      { choices: [{ delta: { content: "answer" }, finish_reason: "stop" }] },
+    ]),
+  }));
+  try {
+    const events: { type: string; text?: string }[] = [];
+    const service = await AgentService.create({
+      cwd,
+      env: envFor(cwd, server.url),
+      version: "test",
+      send: (_channel, payload) => events.push(payload as { type: string; text?: string }),
+    });
+
+    await service.run("hi");
+    const reasoning = events.find((event) => event.type === "reasoning-delta");
+    assert.equal(reasoning?.text, "thinking hard");
+
+    const sessionId = service.state().sessionId;
+    service.newSession();
+    const reopened = await service.openSession(sessionId);
+    assert.equal(reopened.ok, true);
+    const assistant = reopened.ok
+      ? reopened.history.find((message) => message.role === "assistant")
+      : undefined;
+    assert.equal(
+      assistant !== undefined && assistant.role === "assistant" ? assistant.reasoning : undefined,
+      "thinking hard",
+    );
+  } finally {
+    await server.close();
+  }
+});
+
 test("opens a previous session with its history", async () => {
   const cwd = await workspace();
   const server = await startMockServer(() => ({
