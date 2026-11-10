@@ -6,14 +6,50 @@ A headless-first coding agent harness with a CLI and a Windows desktop app.
 
 Altiora runs a model against a real working directory: it streams a turn, executes tools, enforces permissions, and records everything in an append-only session log that can be resumed, forked, or replayed.
 
-Status: **0.1.0**. The CLI is feature-complete through M7, and M8 adds an Electron desktop shell packaged as an NSIS installer.
+Status: **0.1.0** on npm. The repository implements M0–M8; the next scope is M9–M11.
 
-## Why another harness
+## Design
+
+### Architecture
+
+```
+CLI (src/cli)                 Desktop (desktop/)
+        \                      /
+         runAgent loop (src/core)
+          |        |        |
+   providers     tools    permissions
+          \        |        /
+     append-only session log (JSONL)
+```
+
+`runAgent` takes a provider, a tool registry, the permission engine and a log sink. It appends each turn, attempt, tool call, permission decision and result as it goes, and emits `RunEvent` objects. The CLI renderers and the desktop window consume those events; nothing in the core writes to stdout. Model context is projected from the log, so resume, fork and replay all read the same file.
+
+Imports enforce the boundaries: `src/core` never imports `src/providers` or `src/cli`, wire formats stay in the provider adapter, and the desktop shell imports the built core and runs the same loop inside the Electron main process. There is no HTTP listener between the window and the loop.
+
+### Principles
 
 - **The session log is the source of truth.** Model context is projected from it, so resume, fork, replay, and crash recovery all come from the same data. Interrupted tool calls are settled on resume instead of being silently dropped.
 - **Permissions are enforced by the harness, not requested in the prompt.** Rules use `deny -> ask -> allow` with first-match semantics. Headless runs have an explicit `unattended` policy where `ask` becomes `deny`.
 - **Provider differences stay at the edge.** The core speaks semantic messages; OpenAI-compatible wire formats, `reasoning_content` round-tripping, and tool-call chunk assembly live in one adapter.
 - **Small dependency surface.** Runtime dependencies are added only when they pay for themselves; tests use `node:test`; the CLI parses arguments with `node:util`.
+- **Windows is a first-class platform.** Commands are spawned with argument arrays and never `shell: true`; path containment compares resolved paths with `path.relative`.
+
+## Status
+
+Shipped:
+
+- CLI through M7: streaming chat with tool activity, permission rules, JSONL sessions with resume and fork, AGENTS.md context, compaction, subagents, web fetch, `apply_patch`, `/stats` `/compress` `/model`, and context-window discovery.
+- Desktop through M8: Electron shell with a session sidebar, workspace picker, file tree and read-only preview, streaming reasoning, and approval dialogs; both the executable and the installer carry the app icon.
+- `altiora-agent@0.1.0` is published on npm; the command is `altiora`.
+
+Verification: `npm test` runs the unit tests plus end-to-end tests against a mock OpenAI-compatible server, and `npm run lint`, `npm run typecheck` and `npm run build` gate the tree. The desktop package has its own tests for the agent service, and the NSIS installer has been installed and uninstalled silently on Windows.
+
+Known limits:
+
+- The installer is unsigned, so SmartScreen warns on first run.
+- MCP servers, skills, hooks and checkpointing are not implemented yet; they are M9–M11.
+- Only the OpenAI-compatible provider is implemented; native Anthropic and Gemini adapters are not.
+- The desktop app targets Windows today, and there is no browser UI.
 
 ## Requirements
 
@@ -121,19 +157,20 @@ desktop/scripts   core copy and icon generation
 
 ## Roadmap
 
-| Milestone | Scope |
-|---|---|
-| M0 | Repository scaffold, config schema, CLI shell, CI |
-| M1 | OpenAI-compatible provider, SSE streaming, retries |
-| M2 | Multi-step loop, eight tools, permission engine |
-| M3 | JSONL sessions, resume/fork, `stream-json` output |
-| M4 | Token accounting, AGENTS.md memory, compaction |
-| M5 | Subagents, web fetch, docs, npm release |
-| M6 | Interactive TUI |
-| M7 | Context-window discovery, `apply_patch`, session stats and compaction commands |
-| M8 | Electron desktop app, NSIS installer |
+| Milestone | Target | Scope |
+|---|---|---|
+| M9 | CLI 0.3.0 | MCP stdio client: zero-dependency JSON-RPC over newline-delimited frames, tools only, trust-gated config, names exposed as `mcp_<server>_<tool>` |
+| M10 | CLI 0.4.0 | Harness spec and library, skills, hooks, `altiora doctor`, pointer-based compaction, input fingerprints |
+| M11 | CLI 0.5.0 | Checkpointing and `/rewind` over the resources a tool declares |
 
-Published as `altiora-agent`; the command is `altiora`.
+The order is deliberate: MCP adds the largest pool of external tools, M10 turns the harness itself into versioned data that sessions can be compared against, and M11 adds the safety net for file writes.
+
+### Explicit non-goals
+
+- A browser UI or a local HTTP server; the desktop app talks to the loop over Electron IPC.
+- A plugin-graph architecture; MCP, skills and hooks are planned to cover the same ground with less machinery.
+- OS sandboxes, LSP servers, agent teams and computer use.
+- Native Anthropic and Gemini wire formats until the OpenAI-compatible adapter stops being enough.
 
 ## License
 
