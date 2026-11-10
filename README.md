@@ -72,6 +72,20 @@ For scripts, `--output-format json` prints one result object and `--output-forma
 
 `npm run package` rebuilds the core, copies its `dist` into the app, and writes an NSIS installer plus an unpacked build to `desktop/release/`. The installer is per-user, allows choosing the directory, and is unsigned, so Windows SmartScreen warns on first run. Installer art comes from `desktop/scripts/make-icons.py`, which needs Pillow and regenerates the ICO, header and sidebar bitmaps in `desktop/build/`.
 
+### Screenshots
+
+![Altiora window with a streaming answer, an expanded reasoning block and the file panel](docs/screenshots/app.png)
+
+Streaming answer, reasoning block and the collapsible file panel.
+
+![Approval dialog shown before an edit tool call](docs/screenshots/approval.png)
+
+Tool calls that write files wait for explicit approval.
+
+![Read-only preview of a file opened from the workspace tree](docs/screenshots/preview.png)
+
+The workspace tree opens files as a read-only preview.
+
 ## Project instructions and context
 
 `AGENTS.md` files are loaded from the repository root down to the working directory, plus a global file in the config directory. A line that is just `@path` imports another file, up to four levels deep and only inside the repository; the combined text is capped at 48k characters.
