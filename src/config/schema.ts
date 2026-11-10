@@ -21,6 +21,15 @@ export interface ToolsConfig {
   bash: BashToolConfig;
 }
 
+export interface McpServerConfig {
+  command: string;
+  args?: string[];
+  env?: Record<string, string>;
+  cwd?: string;
+  timeoutMs?: number;
+  enabled?: boolean;
+}
+
 export interface PermissionsConfig {
   mode: PermissionMode;
   rules: PermissionRule[];
@@ -52,6 +61,7 @@ export interface Config {
   maxOutputChars: number;
   temperature?: number;
   tools: ToolsConfig;
+  mcpServers: Record<string, McpServerConfig>;
   permissions: PermissionsConfig;
   compaction: CompactionConfig;
   retry: RetryConfig;
@@ -75,6 +85,7 @@ export const DEFAULT_CONFIG: Config = {
       timeoutMs: 120000,
     },
   },
+  mcpServers: {},
   permissions: {
     mode: "default",
     rules: [],
@@ -105,6 +116,7 @@ export function resolveConfig(partial: Partial<Config> = {}): Config {
         ...partial.tools?.bash,
       },
     },
+    mcpServers: partial.mcpServers ?? DEFAULT_CONFIG.mcpServers,
     permissions: {
       ...DEFAULT_CONFIG.permissions,
       ...partial.permissions,
@@ -125,9 +137,15 @@ export function resolveConfig(partial: Partial<Config> = {}): Config {
 const PERMISSION_MODES: ReadonlySet<string> = new Set(["default", "plan", "unattended"]);
 const PERMISSION_EFFECTS: ReadonlySet<string> = new Set(["allow", "ask", "deny"]);
 const SHELLS: ReadonlySet<string> = new Set(["auto", "pwsh", "powershell", "bash", "sh"]);
+const SERVER_NAME = /^[a-zA-Z0-9_-]+$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringRecord(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  return Object.values(value).every((entry) => typeof entry === "string");
 }
 
 function isPositiveInteger(value: unknown): boolean {
@@ -212,6 +230,48 @@ export function validateConfig(input: unknown): string[] {
               problems.push(`permissions.rules[${index}].pattern must be a string`);
             }
           });
+        }
+      }
+    }
+  }
+
+  const mcpServers = input["mcpServers"];
+  if (mcpServers !== undefined) {
+    if (!isRecord(mcpServers)) {
+      problems.push("mcpServers must be an object");
+    } else {
+      for (const [name, server] of Object.entries(mcpServers)) {
+        if (!SERVER_NAME.test(name)) {
+          problems.push(`mcpServers.${name} name must use letters, digits, _ or -`);
+          continue;
+        }
+        if (!isRecord(server)) {
+          problems.push(`mcpServers.${name} must be an object`);
+          continue;
+        }
+        const command = server["command"];
+        if (typeof command !== "string" || command === "") {
+          problems.push(`mcpServers.${name}.command must be a non-empty string`);
+        }
+        const args = server["args"];
+        if (args !== undefined && (!Array.isArray(args) || args.some((arg) => typeof arg !== "string"))) {
+          problems.push(`mcpServers.${name}.args must be an array of strings`);
+        }
+        const env = server["env"];
+        if (env !== undefined && !isStringRecord(env)) {
+          problems.push(`mcpServers.${name}.env must be an object mapping strings to strings`);
+        }
+        const cwd = server["cwd"];
+        if (cwd !== undefined && (typeof cwd !== "string" || cwd === "")) {
+          problems.push(`mcpServers.${name}.cwd must be a non-empty string`);
+        }
+        const timeoutMs = server["timeoutMs"];
+        if (timeoutMs !== undefined && !isPositiveInteger(timeoutMs)) {
+          problems.push(`mcpServers.${name}.timeoutMs must be a positive integer`);
+        }
+        const enabled = server["enabled"];
+        if (enabled !== undefined && typeof enabled !== "boolean") {
+          problems.push(`mcpServers.${name}.enabled must be a boolean`);
         }
       }
     }

@@ -42,6 +42,7 @@ function mergeConfig(base: Config, next: Partial<Config>): Config {
     ...base,
     ...next,
     tools: next.tools === undefined ? base.tools : { bash: { ...base.tools.bash, ...next.tools.bash } },
+    mcpServers: next.mcpServers === undefined ? base.mcpServers : { ...base.mcpServers, ...next.mcpServers },
     permissions:
       next.permissions === undefined
         ? base.permissions

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -52,4 +53,62 @@ test("explicit overrides beat the environment", () => {
   env.ALTIORA_CONTEXT_WINDOW = "200000";
   const config = loadConfig({ cwd: tmpdir(), env, overrides: { contextWindow: 9000 } }).config;
   assert.equal(config.contextWindow, 9000);
+});
+
+test("mcpServers defaults to an empty record", () => {
+  assert.deepEqual(DEFAULT_CONFIG.mcpServers, {});
+  assert.deepEqual(loadConfig({ cwd: tmpdir(), env: isolatedEnv() }).config.mcpServers, {});
+});
+
+test("validateConfig accepts a complete mcpServers entry", () => {
+  const problems = validateConfig({
+    mcpServers: {
+      deepseek: {
+        command: "node",
+        args: ["server.ts"],
+        env: { TOKEN: "x" },
+        cwd: "/tmp",
+        timeoutMs: 5000,
+        enabled: true,
+      },
+    },
+  });
+  assert.deepEqual(problems, []);
+});
+
+test("validateConfig rejects invalid mcpServers entries", () => {
+  const cases: unknown[] = [
+    "nope",
+    { "bad name": { command: "node" } },
+    { good: "nope" },
+    { good: { command: "" } },
+    { good: {} },
+    { good: { command: "node", args: [3] } },
+    { good: { command: "node", args: "x" } },
+    { good: { command: "node", env: { A: 1 } } },
+    { good: { command: "node", env: ["a"] } },
+    { good: { command: "node", cwd: "" } },
+    { good: { command: "node", timeoutMs: 0 } },
+    { good: { command: "node", enabled: "yes" } },
+  ];
+  for (const invalid of cases) {
+    assert.notDeepEqual(validateConfig({ mcpServers: invalid }), [], JSON.stringify(invalid));
+  }
+});
+
+test("mcpServers merge per name across config layers", () => {
+  const env = isolatedEnv();
+  mkdirSync(env.ALTIORA_CONFIG_DIR!, { recursive: true });
+  writeFileSync(join(env.ALTIORA_CONFIG_DIR!, "config.json"), JSON.stringify({
+    mcpServers: { userServer: { command: "node" } },
+  }));
+  const config = loadConfig({
+    cwd: tmpdir(),
+    env,
+    overrides: { mcpServers: { cliServer: { command: "python" } } },
+  }).config;
+  assert.deepEqual(config.mcpServers, {
+    userServer: { command: "node" },
+    cliServer: { command: "python" },
+  });
 });
