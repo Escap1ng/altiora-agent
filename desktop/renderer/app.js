@@ -65,6 +65,9 @@ const SIDEBAR_KEY = "altiora.sidebar";
 const RIGHT_KEY = "altiora.rightPanel";
 const THEME_KEY = "altiora.theme";
 
+// Left/right panel linkage is kept but not wired for now; flip to true to re-enable.
+const PANEL_LINKAGE = false;
+
 /* ---------- theme ---------- */
 function applyTheme(t) {
   document.documentElement.dataset.theme = t;
@@ -77,7 +80,7 @@ themeToggleEl.addEventListener("click", () =>
 
 /* ---------- panels ---------- */
 function setSidebar(open) {
-  if (open && shellEl.classList.contains("right-open")) setRightPanel(false);
+  if (PANEL_LINKAGE && open && shellEl.classList.contains("right-open")) setRightPanel(false);
   shellEl.classList.toggle("sidebar-collapsed", !open);
   toggleSidebarEl.hidden = open;
   toggleSidebarEl.setAttribute("aria-expanded", String(open));
@@ -85,18 +88,18 @@ function setSidebar(open) {
 }
 function setRightPanel(open) {
   if (open) {
-    sidebarBeforeRight = !shellEl.classList.contains("sidebar-collapsed");
-    shellEl.classList.add("sidebar-collapsed");
-    toggleSidebarEl.hidden = false;
-    toggleSidebarEl.setAttribute("aria-expanded", "false");
-    void loadTree();
-  } else {
-    if (sidebarBeforeRight) {
-      shellEl.classList.remove("sidebar-collapsed");
-      toggleSidebarEl.hidden = true;
-      toggleSidebarEl.setAttribute("aria-expanded", "true");
-      localStorage.setItem(SIDEBAR_KEY, "open");
+    if (PANEL_LINKAGE) {
+      sidebarBeforeRight = !shellEl.classList.contains("sidebar-collapsed");
+      shellEl.classList.add("sidebar-collapsed");
+      toggleSidebarEl.hidden = false;
+      toggleSidebarEl.setAttribute("aria-expanded", "false");
     }
+    void loadTree();
+  } else if (PANEL_LINKAGE && sidebarBeforeRight) {
+    shellEl.classList.remove("sidebar-collapsed");
+    toggleSidebarEl.hidden = true;
+    toggleSidebarEl.setAttribute("aria-expanded", "true");
+    localStorage.setItem(SIDEBAR_KEY, "open");
   }
   shellEl.classList.toggle("right-open", open);
   toggleRightEl.setAttribute("aria-expanded", String(open));
