@@ -42,4 +42,4 @@ npm run build
 
 ## Status
 
-M6 complete: `altiora chat` provides an interactive readline session with streaming output, tool activity, y/N approval for `ask` rules, `/new` and `/exit`; the loop gained a `confirm` hook. All planned milestones are shipped.
+M0-M8 shipped: agent loop, tools and permission engine; JSONL sessions with resume/fork; AGENTS.md memory and compaction; subagents, webfetch and apply_patch; interactive chat with `/stats` `/compress` `/model`; context-window discovery; Electron desktop shell with a docked progress panel. `altiora-agent@0.1.0` is published on npm. Next scope is M9-M13 (MCP stdio client, doctor/skills, harness spec/hooks/fingerprints, checkpointing, provider breadth, desktop parity); see docs/PLAN.md.

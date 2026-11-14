@@ -140,8 +140,8 @@ Optimizations, ordered by payoff:
 
 ## 4. Cross-cutting work (before or alongside M9)
 
-1. Fix the stale status section in AGENTS.md (owner: next commit).
-2. Add root `npm run build`, desktop typecheck and desktop tests to CI; keep the OS/Node matrix.
+1. Fix the stale status section in AGENTS.md (done 2026-11-14: now reflects M0-M8 shipped and M9-M13 next).
+2. Add root `npm run build`, desktop typecheck and desktop tests to CI; keep the OS/Node matrix (done 2026-11-14: root build step plus a desktop job with its own npm ci/build/typecheck/test).
 3. Tag the existing 0.1.0 release commit `v0.1.0`; tag every future release per RELEASING.md.
 4. Keep the zero-runtime-dependency rule: MCP client, skills and hooks must not add runtime deps without removing more code than they add.
 
