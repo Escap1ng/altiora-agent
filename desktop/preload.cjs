@@ -15,6 +15,8 @@ contextBridge.exposeInMainWorld("altiora", {
   openSession: (id) => ipcRenderer.invoke("altiora:open-session", id),
   newSession: () => ipcRenderer.invoke("altiora:new-session"),
   pickWorkspace: () => ipcRenderer.invoke("altiora:pick-workspace"),
+  setMode: (mode) => ipcRenderer.invoke("altiora:set-mode", mode),
+  openFolder: (path) => ipcRenderer.invoke("altiora:open-folder", path),
   listDir: (path) => ipcRenderer.invoke("altiora:list-dir", path),
   readFile: (path) => ipcRenderer.invoke("altiora:read-file", path),
   respond: (id, approved) => ipcRenderer.invoke("altiora:confirm-response", { id, approved }),

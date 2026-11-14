@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from "electron";
 import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -31,7 +31,7 @@ function createWindow(): void {
     minHeight: 560,
     title: "Altiora",
     icon: join(root, "build", "icon.ico"),
-    backgroundColor: "#f3f4f6",
+    backgroundColor: "#f7f7f8",
     show: false,
     webPreferences: {
       preload: join(root, "preload.cjs"),
@@ -154,6 +154,23 @@ ipcMain.handle("altiora:read-file", async (_event, target: unknown) => {
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : String(error) };
   }
+});
+
+ipcMain.handle("altiora:set-mode", (_event, mode: unknown) => {
+  if (service === undefined) return { ok: false, message: startupError ?? "starting" };
+  if (mode !== "default" && mode !== "plan" && mode !== "unattended") {
+    return { ok: false, message: "invalid permission mode" };
+  }
+  service.setMode(mode);
+  return { ok: true, mode };
+});
+
+ipcMain.handle("altiora:open-folder", async (_event, target: unknown) => {
+  if (service === undefined) return { ok: false, message: startupError ?? "starting" };
+  const resolved = workspacePath(typeof target === "string" ? target : "");
+  if (resolved === undefined) return { ok: false, message: "path escapes the workspace" };
+  const error = await shell.openPath(resolved.absolute);
+  return error === "" ? { ok: true } : { ok: false, message: error };
 });
 
 ipcMain.handle("altiora:confirm-response", (_event, payload: unknown) => {

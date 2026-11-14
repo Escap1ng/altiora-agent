@@ -26,7 +26,9 @@ export function sessionsCommand(argv: string[], io: SessionsIo): number {
     }
     for (const session of sessions) {
       const updated = new Date(session.updatedAt).toISOString();
-      io.stdout.write(`${session.id}  ${updated}  ${session.model || "-"}  ${session.records} records\n`);
+      io.stdout.write(
+        `${session.id}  ${updated}  ${session.model || "-"}  ${session.title || "(untitled)"}  ${session.records} records\n`,
+      );
     }
     return 0;
   }

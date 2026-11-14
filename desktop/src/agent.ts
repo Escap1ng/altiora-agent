@@ -103,6 +103,11 @@ export class AgentService {
     return this.running !== undefined;
   }
 
+  setMode(mode: "default" | "plan" | "unattended"): void {
+    this.runtime.permissions.setMode(mode);
+    this.runtime.mode = mode;
+  }
+
   sessions(): SessionSummary[] {
     return listSessions(AgentService.directoryFor(this.options));
   }
