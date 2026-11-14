@@ -15,6 +15,7 @@ export interface PermissionDecision {
 
 export interface PermissionEngine {
   decide(request: PermissionRequest): PermissionDecision;
+  setMode(mode: PermissionMode): void;
 }
 
 const PRIORITY: Record<PermissionDecision["effect"], number> = { allow: 0, ask: 1, deny: 2 };
@@ -28,8 +29,12 @@ export interface EngineOptions {
 
 export function createPermissionEngine(options: EngineOptions): PermissionEngine {
   const rules = normalizeRules(options.rules);
+  let mode = options.mode;
 
   return {
+    setMode(next) {
+      mode = next;
+    },
     decide(request) {
       const matching = rules.filter(
         (rule) =>
@@ -55,14 +60,14 @@ export function createPermissionEngine(options: EngineOptions): PermissionEngine
         effect = "allow";
         reason = "read-only tool";
       } else {
-        effect = options.mode === "default" ? "ask" : "deny";
-        reason = options.mode === "default" ? "no matching rule" : `${options.mode} mode`;
+        effect = mode === "default" ? "ask" : "deny";
+        reason = mode === "default" ? "no matching rule" : `${mode} mode`;
       }
 
-      if (options.mode === "plan" && !request.readOnly) {
+      if (mode === "plan" && !request.readOnly) {
         return { effect: "deny", reason: "plan mode blocks writes" };
       }
-      if (options.mode === "unattended" && effect === "ask") {
+      if (mode === "unattended" && effect === "ask") {
         return { effect: "deny", reason: `${reason}; unattended mode turns ask into deny` };
       }
       return ruleId === undefined ? { effect, reason } : { effect, reason, ruleId };

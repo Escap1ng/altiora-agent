@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -7,7 +7,7 @@ import { loadConfig } from "../../src/config/load.ts";
 import { DEFAULT_CONFIG, validateConfig } from "../../src/config/schema.ts";
 
 function isolatedEnv(): NodeJS.ProcessEnv {
-  const dir = join(tmpdir(), "altiora-config-unit");
+  const dir = mkdtempSync(join(tmpdir(), "altiora-config-unit-"));
   const env: NodeJS.ProcessEnv = { ...process.env, ALTIORA_CONFIG_DIR: dir, ALTIORA_DATA_DIR: dir };
   delete env.ALTIORA_CONTEXT_WINDOW;
   delete env.ALTIORA_MAX_STEPS;

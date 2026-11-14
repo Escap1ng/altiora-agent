@@ -11,56 +11,107 @@
   </head>
   <body>
     <div class="shell">
-      <aside class="sidebar">
+      <aside class="sidebar" id="sidebar">
         <div class="brand">
-          <span class="mark">A</span>
+          <span class="mark" aria-hidden="true">A</span>
           <span class="name">Altiora</span>
+          <button type="button" class="icon-button" id="collapse-sidebar" title="Hide sidebar" aria-label="Hide sidebar">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <rect x="1.7" y="2.7" width="12.6" height="10.6" rx="2.4" stroke="currentColor" stroke-width="1.3" />
+              <path d="M6.2 2.7v10.6" stroke="currentColor" stroke-width="1.3" />
+            </svg>
+          </button>
         </div>
-        <button type="button" class="new-session" id="new-session">New session</button>
-        <div class="sidebar-label">Sessions</div>
-        <div class="sessions" id="sessions">
-          <div class="session-empty">No sessions yet</div>
+
+        <div class="mode-switch" role="tablist" aria-label="Permission mode">
+          <button type="button" class="mode-tab" data-mode="default" role="tab">Default</button>
+          <button type="button" class="mode-tab" data-mode="plan" role="tab">Plan</button>
+          <button type="button" class="mode-tab" data-mode="unattended" role="tab">Auto</button>
+        </div>
+
+        <button type="button" class="new-task" id="new-session">
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+          </svg>
+          <span>New task</span>
+          <span class="new-task-wave" aria-hidden="true">
+            <i></i><i></i><i></i><i></i>
+          </span>
+        </button>
+
+        <nav class="nav">
+          <button type="button" class="nav-row" id="nav-skills">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M8 1.8l1.8 4 4.4.5-3.3 3 1 4.4L8 11.4l-3.9 2.3 1-4.4-3.3-3 4.4-.5z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" />
+            </svg>
+            <span>Skills</span>
+          </button>
+          <button type="button" class="nav-row" id="nav-connections">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="5.6" stroke="currentColor" stroke-width="1.2" />
+              <circle cx="8" cy="8" r="2" stroke="currentColor" stroke-width="1.2" />
+            </svg>
+            <span>Connections</span>
+          </button>
+        </nav>
+
+        <div class="side-scroll">
+          <div class="side-section">
+            <div class="side-head">
+              <span>Projects</span>
+              <button type="button" class="icon-button tiny" id="pick-workspace" title="Open another workspace" aria-label="Open another workspace">
+                <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                  <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                </svg>
+              </button>
+            </div>
+            <div class="project">
+              <button type="button" class="project-row" id="project-toggle" aria-expanded="true">
+                <span class="chev" aria-hidden="true">▾</span>
+                <span class="project-name" id="workspace-name">workspace</span>
+              </button>
+              <div class="sessions" id="sessions">
+                <div class="session-empty">No sessions yet</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="side-section">
+            <div class="side-head"><span>Tasks</span></div>
+            <div class="tasks" id="tasks">
+              <div class="session-empty">No tasks</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="side-foot">
+          <span class="version" id="version">v0.1.0</span>
+          <button type="button" class="icon-button tiny" id="theme-toggle" title="Toggle theme" aria-label="Toggle theme">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M13.5 9.5A6 6 0 016.5 2.5a6 6 0 107 7z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" />
+            </svg>
+          </button>
         </div>
       </aside>
 
       <main class="main">
         <header class="topbar">
           <div class="topbar-left">
-            <button
-              type="button"
-              class="icon-button"
-              id="toggle-sidebar"
-              title="Hide sidebar"
-              aria-label="Toggle sidebar"
-              aria-expanded="true"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <button type="button" class="icon-button" id="toggle-sidebar" title="Show sidebar" aria-label="Toggle sidebar" aria-expanded="true" hidden>
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <rect x="1.7" y="2.7" width="12.6" height="10.6" rx="2.4" stroke="currentColor" stroke-width="1.3" />
                 <path d="M6.2 2.7v10.6" stroke="currentColor" stroke-width="1.3" />
               </svg>
             </button>
-            <div class="titles">
-              <div class="session-title" id="session-title">New session</div>
-              <div class="workspace-row">
-                <span class="workspace" id="workspace"></span>
-                <button type="button" class="link" id="pick-workspace">Change</button>
-              </div>
-            </div>
+            <div class="session-title" id="session-title">New task</div>
           </div>
           <div class="topbar-right">
             <div class="status" id="status">
               <span class="dot" id="status-dot"></span>
               <span id="status-text">starting</span>
             </div>
-            <button
-              type="button"
-              class="icon-button"
-              id="toggle-right"
-              title="Show files"
-              aria-label="Toggle files panel"
-              aria-expanded="false"
-            >
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+            <button type="button" class="icon-button" id="toggle-right" title="Show progress panel" aria-label="Toggle progress panel" aria-expanded="false">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <rect x="1.7" y="2.7" width="12.6" height="10.6" rx="2.4" stroke="currentColor" stroke-width="1.3" />
                 <path d="M9.8 2.7v10.6" stroke="currentColor" stroke-width="1.3" />
               </svg>
@@ -73,34 +124,101 @@
             <div class="empty-mark">A</div>
             <div class="empty-title">Ready when you are</div>
             <div class="empty-body">Ask Altiora to inspect or change the workspace.</div>
+            <div class="suggestions">
+              <button type="button" class="suggestion" data-prompt="Summarize this repository and its architecture">Summarize this repository</button>
+              <button type="button" class="suggestion" data-prompt="Find the most complex function in this codebase and explain it">Explain the hardest code</button>
+              <button type="button" class="suggestion" data-prompt="List the files that changed recently and what they do">What changed recently</button>
+            </div>
           </div>
         </section>
 
         <form class="composer" id="composer">
           <div class="composer-card">
-            <textarea
-              id="prompt"
-              rows="3"
-              placeholder="Describe a task for Altiora"
-              spellcheck="false"
-            ></textarea>
+            <textarea id="prompt" rows="1" placeholder="Describe a task for Altiora" spellcheck="false"></textarea>
             <div class="composer-actions">
-              <span class="hint">Enter to send, Shift+Enter for a new line</span>
+              <div class="chips">
+                <button type="button" class="icon-button chip-plus" id="composer-workspace" title="Change workspace" aria-label="Change workspace">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                  </svg>
+                </button>
+                <button type="button" class="chip" id="mode-chip" title="Permission mode">default</button>
+                <button type="button" class="chip" id="model-chip" title="Active model">model</button>
+              </div>
               <div class="buttons">
-                <button type="button" class="ghost" id="abort" hidden>Stop</button>
-                <button type="submit" id="send">Send</button>
+                <button type="submit" class="send" id="send" title="Send" aria-label="Send">
+                  <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <path d="M8 13V3M4 7l4-4 4 4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <button type="button" class="send stop" id="abort" title="Stop" aria-label="Stop" hidden>
+                  <svg width="12" height="12" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                    <rect x="4" y="4" width="8" height="8" rx="1.5" fill="currentColor" />
+                  </svg>
+                </button>
               </div>
             </div>
           </div>
+          <div class="composer-hint">Enter to send, Shift+Enter for a new line</div>
         </form>
       </main>
 
       <aside class="rightbar" id="rightbar">
         <div class="rightbar-head">
-          <span class="rightbar-title">Files</span>
-          <button type="button" class="link" id="refresh-tree">Refresh</button>
+          <span class="rightbar-title">Progress</span>
+          <button type="button" class="icon-button tiny" id="close-right" title="Hide panel" aria-label="Hide panel">
+            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <path d="M4 4l8 8M12 4l-8 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+            </svg>
+          </button>
         </div>
-        <div class="tree" id="tree"></div>
+
+        <div class="rightbar-body">
+          <section class="panel-card" id="card-plan">
+            <div class="panel-card-head"><span>Plan</span></div>
+            <div class="panel-card-body" id="plan-body">
+              <div class="panel-muted">Complex tasks get a plan before execution.</div>
+            </div>
+          </section>
+
+          <section class="panel-card" id="card-files">
+            <button type="button" class="panel-card-head toggle" id="files-toggle" aria-expanded="true">
+              <span>Working files</span><span class="chev" aria-hidden="true">▾</span>
+            </button>
+            <div class="panel-card-body" id="files-body">
+              <div class="files-group">
+                <div class="files-group-head">
+                  <span>Result files</span>
+                  <button type="button" class="icon-button tiny" id="open-folder" title="Open workspace folder" aria-label="Open workspace folder">
+                    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+                      <path d="M2 4.5h4l1.5 1.5H14v7H2z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" />
+                    </svg>
+                  </button>
+                </div>
+                <div class="file-list" id="result-files">
+                  <div class="panel-muted">No files touched yet.</div>
+                </div>
+              </div>
+              <div class="files-group">
+                <div class="files-group-head"><span>Workspace</span></div>
+                <div class="tree" id="tree"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel-card" id="card-skills">
+            <button type="button" class="panel-card-head toggle" id="skills-toggle" aria-expanded="true">
+              <span>Skills &amp; connections</span><span class="chev" aria-hidden="true">▾</span>
+            </button>
+            <div class="panel-card-body" id="skills-body">
+              <div class="skill-chips" id="skill-chips">
+                <span class="skill-chip">agent loop</span>
+                <span class="skill-chip">permissions</span>
+                <span class="skill-chip">sessions</span>
+              </div>
+            </div>
+          </section>
+        </div>
       </aside>
     </div>
 
@@ -121,6 +239,16 @@
         <div class="modal-actions">
           <button type="button" class="ghost" id="deny">Deny</button>
           <button type="button" id="approve">Approve</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="info" hidden>
+      <div class="modal">
+        <div class="modal-title" id="info-title">Skills</div>
+        <div class="modal-body" id="info-body"></div>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="info-close">Close</button>
         </div>
       </div>
     </div>

@@ -64,6 +64,7 @@ test("streams a turn and records the session", async () => {
     assert.ok(events.some((event) => event.type === "text-delta"));
     assert.equal(server.requests.length, 1);
     assert.equal(service.sessions().length, 1);
+    assert.equal(service.sessions()[0]?.title, "hi");
   } finally {
     await server.close();
   }

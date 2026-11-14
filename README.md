@@ -157,13 +157,18 @@ desktop/scripts   core copy and icon generation
 
 ## Roadmap
 
+The detailed plan, acceptance criteria and deferred items live in [docs/PLAN.md](docs/PLAN.md).
+
 | Milestone | Target | Scope |
 |---|---|---|
-| M9 | CLI 0.3.0 | MCP stdio client: zero-dependency JSON-RPC over newline-delimited frames, tools only, trust-gated config, names exposed as `mcp_<server>_<tool>` |
-| M10 | CLI 0.4.0 | Harness spec and library, skills, hooks, `altiora doctor`, pointer-based compaction, input fingerprints |
-| M11 | CLI 0.5.0 | Checkpointing and `/rewind` over the resources a tool declares |
+| M9 | CLI 0.2.0 | MCP stdio client: zero-dependency JSON-RPC over newline-delimited frames, tools only, trust-gated config, names exposed as `mcp_<server>_<tool>` |
+| M10a | CLI 0.3.0 | `altiora doctor` and skills |
+| M10b | CLI 0.3.0 | Harness spec and library, hooks, input fingerprints |
+| M11 | CLI 0.4.0 | Checkpointing and `/rewind` over the resources a tool declares |
+| M12 | CLI 0.5.0 | Native Anthropic adapter, capability matrix, `altiora models`, mid-session model switching |
+| M13 | desktop 0.3.0 | Session rename/pin/delete/search, workspace history, skills and connections panels, usage view |
 
-The order is deliberate: MCP adds the largest pool of external tools, M10 turns the harness itself into versioned data that sessions can be compared against, and M11 adds the safety net for file writes.
+The order is deliberate: MCP adds the largest pool of external tools, M10 turns the harness itself into versioned data that sessions can be compared against, and M11 adds the safety net for file writes. Pointer-based compaction is deferred until summary-based compaction shows measured context loss.
 
 ### Explicit non-goals
 

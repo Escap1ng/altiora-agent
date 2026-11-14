@@ -8,8 +8,19 @@ export interface SessionSummary {
   path: string;
   cwd: string;
   model: string;
+  title: string;
   updatedAt: number;
   records: number;
+}
+
+export function sessionTitle(records: readonly { t: string; input?: unknown }[]): string {
+  for (const record of records) {
+    if (record.t !== "turn/start" || typeof record.input !== "string") continue;
+    const line = (record.input.trim().split("\n")[0] ?? "").trim();
+    if (line === "") continue;
+    return line.length > 60 ? `${line.slice(0, 57)}...` : line;
+  }
+  return "";
 }
 
 export function listSessions(directory: string): SessionSummary[] {
@@ -26,6 +37,7 @@ export function listSessions(directory: string): SessionSummary[] {
       path,
       cwd: start !== undefined && start.t === "session/start" ? start.cwd : "",
       model: start !== undefined && start.t === "session/start" ? start.model : "",
+      title: sessionTitle(records),
       updatedAt: statSync(path).mtimeMs,
       records: records.length,
     });
