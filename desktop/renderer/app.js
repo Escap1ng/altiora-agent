@@ -1,3 +1,5 @@
+import { STRINGS } from "./i18n.js";
+
 const api = window.altiora;
 const $ = (s) => document.querySelector(s);
 
@@ -36,7 +38,7 @@ const versionEl = $("#version");
 const themeToggleEl = $("#theme-toggle");
 const modeChipEl = $("#mode-chip");
 const modelChipEl = $("#model-chip");
-const modeTabs = Array.from(document.querySelectorAll(".mode-tab"));
+const modeTabs = Array.from(document.querySelectorAll(".mode-switch .mode-tab"));
 const modalEl = $("#modal");
 const modalTitleEl = $("#modal-title");
 const modalBodyEl = $("#modal-body");
@@ -46,9 +48,14 @@ const infoEl = $("#info");
 const infoTitleEl = $("#info-title");
 const infoBodyEl = $("#info-body");
 const infoCloseEl = $("#info-close");
+const settingsEl = $("#settings");
+const settingsCloseEl = $("#settings-close");
+const langTabs = Array.from(document.querySelectorAll("#lang-seg .mode-tab"));
+const themeSegTabs = Array.from(document.querySelectorAll("#theme-seg .mode-tab"));
 
 let busy = false;
 let currentSessionId = "";
+let currentMode = "default";
 let pendingConfirm = null;
 let run = null;
 let stepAssistant = null;
@@ -60,23 +67,77 @@ const toolRows = new Map();
 const pendingWrites = new Map();
 const resultFiles = new Map();
 const usedTools = new Set();
+const thinkBlocks = new Set();
+const answerBlocks = new Set();
 
 const SIDEBAR_KEY = "altiora.sidebar";
 const RIGHT_KEY = "altiora.rightPanel";
 const THEME_KEY = "altiora.theme";
+const LANG_KEY = "altiora.lang";
 
 // Left/right panel linkage is kept but not wired for now; flip to true to re-enable.
 const PANEL_LINKAGE = false;
 
+/* ---------- i18n ---------- */
+let lang = localStorage.getItem(LANG_KEY) === "en" ? "en" : "zh";
+
+function t(key, vars) {
+  let s = STRINGS[lang][key] ?? STRINGS.en[key] ?? key;
+  if (vars !== undefined) {
+    for (const [k, v] of Object.entries(vars)) s = s.replaceAll(`{${k}}`, String(v));
+  }
+  return s;
+}
+
+function applyI18n() {
+  document.documentElement.lang = lang === "zh" ? "zh-CN" : "en";
+  for (const el of document.querySelectorAll("[data-i18n]")) el.textContent = t(el.dataset.i18n);
+  for (const el of document.querySelectorAll("[data-i18n-title]")) el.title = t(el.dataset.i18nTitle);
+  for (const el of document.querySelectorAll("[data-i18n-aria]")) el.setAttribute("aria-label", t(el.dataset.i18nAria));
+  for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
+  for (const el of document.querySelectorAll(".suggestion[data-sug]")) el.dataset.prompt = t(`sug${el.dataset.sug}.prompt`);
+  applyModeUI(currentMode);
+  for (const tab of langTabs) tab.classList.toggle("active", tab.dataset.lang === lang);
+  const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+  for (const tab of themeSegTabs) tab.classList.toggle("active", tab.dataset.themeChoice === theme);
+  for (const b of thinkBlocks) {
+    if (b.details.open && b.text === "") b.label.textContent = t("think.thinking");
+    else if (b.details.open) b.label.textContent = t("think.thinkingChars", { n: b.text.length.toLocaleString() });
+    else b.label.textContent = t("think.thoughtChars", { n: b.text.length.toLocaleString() });
+  }
+  for (const a of answerBlocks) renderMarkdown(a.text, a.body);
+}
+
+function setLang(next) {
+  lang = next === "en" ? "en" : "zh";
+  localStorage.setItem(LANG_KEY, lang);
+  applyI18n();
+  void refreshState();
+  void refreshSessions();
+  if (treeLoaded) void loadTree();
+}
+
 /* ---------- theme ---------- */
-function applyTheme(t) {
-  document.documentElement.dataset.theme = t;
-  localStorage.setItem(THEME_KEY, t);
+function applyTheme(theme) {
+  document.documentElement.dataset.theme = theme;
+  localStorage.setItem(THEME_KEY, theme);
+  for (const tab of themeSegTabs) tab.classList.toggle("active", tab.dataset.themeChoice === theme);
 }
 applyTheme(localStorage.getItem(THEME_KEY) === "dark" ? "dark" : "light");
 themeToggleEl.addEventListener("click", () =>
   applyTheme(document.documentElement.dataset.theme === "dark" ? "light" : "dark"),
 );
+
+/* ---------- settings ---------- */
+$("#open-settings").addEventListener("click", () => {
+  applyI18n();
+  settingsEl.hidden = false;
+  settingsCloseEl.focus();
+});
+settingsCloseEl.addEventListener("click", () => { settingsEl.hidden = true; });
+settingsEl.addEventListener("click", (e) => { if (e.target === settingsEl) settingsEl.hidden = true; });
+for (const tab of langTabs) tab.addEventListener("click", () => setLang(tab.dataset.lang));
+for (const tab of themeSegTabs) tab.addEventListener("click", () => applyTheme(tab.dataset.themeChoice));
 
 /* ---------- panels ---------- */
 function setSidebar(open) {
@@ -103,7 +164,9 @@ function setRightPanel(open) {
   }
   shellEl.classList.toggle("right-open", open);
   toggleRightEl.setAttribute("aria-expanded", String(open));
-  toggleRightEl.title = open ? "Hide progress panel" : "Show progress panel";
+  const key = open ? "progress.hide" : "progress.show";
+  toggleRightEl.title = t(key);
+  toggleRightEl.setAttribute("aria-label", t(key));
   localStorage.setItem(RIGHT_KEY, open ? "open" : "closed");
 }
 setSidebar(localStorage.getItem(SIDEBAR_KEY) !== "collapsed");
@@ -157,7 +220,7 @@ function renderResultFiles() {
   if (resultFiles.size === 0) {
     const m = document.createElement("div");
     m.className = "panel-muted";
-    m.textContent = "No files touched yet.";
+    m.textContent = t("files.none");
     resultFilesEl.append(m);
     return;
   }
@@ -187,11 +250,11 @@ function renderTodos(input) {
   if (list.length === 0) {
     const e = document.createElement("div");
     e.className = "session-empty";
-    e.textContent = "No tasks";
+    e.textContent = t("tasks.none");
     tasksEl.append(e);
     const m = document.createElement("div");
     m.className = "panel-muted";
-    m.textContent = "Complex tasks get a plan before execution.";
+    m.textContent = t("plan.empty");
     planBodyEl.append(m);
     return;
   }
@@ -228,10 +291,11 @@ function addUsedTool(name) {
 function resetUsedTools() {
   usedTools.clear();
   skillChipsEl.replaceChildren();
-  for (const base of ["agent loop", "permissions", "sessions"]) {
+  for (const key of ["chip.loop", "chip.permissions", "chip.sessions"]) {
     const chip = document.createElement("span");
     chip.className = "skill-chip";
-    chip.textContent = base;
+    chip.dataset.i18n = key;
+    chip.textContent = t(key);
     skillChipsEl.append(chip);
   }
 }
@@ -245,11 +309,11 @@ function treeNote(text) {
 }
 async function loadTree() {
   treeLoaded = true;
-  treeEl.replaceChildren(treeNote("loading..."));
+  treeEl.replaceChildren(treeNote(t("tree.loading")));
   const result = await api.listDir("");
   treeEl.replaceChildren();
   if (!result.ok) return treeEl.append(treeNote(result.message));
-  if (result.entries.length === 0) return treeEl.append(treeNote("empty workspace"));
+  if (result.entries.length === 0) return treeEl.append(treeNote(t("tree.emptyWorkspace")));
   renderEntries(treeEl, result.entries, 0);
 }
 function renderEntries(container, entries, depth) {
@@ -279,7 +343,7 @@ function renderEntries(container, entries, depth) {
         const r = await api.listDir(entry.path);
         children.replaceChildren();
         if (!r.ok) children.append(treeNote(r.message));
-        else if (r.entries.length === 0) children.append(treeNote("empty"));
+        else if (r.entries.length === 0) children.append(treeNote(t("tree.empty")));
         else renderEntries(children, r.entries, depth + 1);
         children.dataset.loaded = "1";
       }
@@ -316,17 +380,14 @@ function restoreEmpty() {
   const empty = document.createElement("div");
   empty.className = "empty";
   const mark = document.createElement("div"); mark.className = "empty-mark"; mark.textContent = "A";
-  const title = document.createElement("div"); title.className = "empty-title"; title.textContent = "Ready when you are";
-  const body = document.createElement("div"); body.className = "empty-body"; body.textContent = "Ask Altiora to inspect or change the workspace.";
+  const title = document.createElement("div"); title.className = "empty-title"; title.textContent = t("empty.title");
+  const body = document.createElement("div"); body.className = "empty-body"; body.textContent = t("empty.body");
   const sug = document.createElement("div"); sug.className = "suggestions";
-  for (const text of [
-    "Summarize this repository and its architecture",
-    "Find the most complex function in this codebase and explain it",
-    "List the files that changed recently and what they do",
-  ]) {
+  for (const i of [1, 2, 3]) {
     const chip = document.createElement("button");
-    chip.type = "button"; chip.className = "suggestion"; chip.dataset.prompt = text;
-    chip.textContent = text.split(" ").slice(0, 4).join(" ");
+    chip.type = "button"; chip.className = "suggestion"; chip.dataset.sug = String(i);
+    chip.dataset.prompt = t(`sug${i}.prompt`);
+    chip.textContent = t(`sug${i}.label`);
     sug.append(chip);
   }
   empty.append(mark, title, body, sug);
@@ -353,12 +414,12 @@ function inlineMarkdown(text, parent) {
   let last = 0;
   for (const m of text.matchAll(pattern)) {
     if (m.index > last) parent.append(document.createTextNode(text.slice(last, m.index)));
-    const t = m[0];
-    if (t.startsWith("`")) { const c = document.createElement("code"); c.textContent = t.slice(1, -1); parent.append(c); }
-    else if (t.startsWith("**")) { const s = document.createElement("strong"); s.textContent = t.slice(2, -2); parent.append(s); }
-    else if (t.startsWith("*")) { const s = document.createElement("em"); s.textContent = t.slice(1, -1); parent.append(s); }
-    else { const a = document.createElement("a"); a.textContent = t.slice(1, t.indexOf("]")); a.title = t.slice(t.indexOf("(") + 1, -1); parent.append(a); }
-    last = m.index + t.length;
+    const tk = m[0];
+    if (tk.startsWith("`")) { const c = document.createElement("code"); c.textContent = tk.slice(1, -1); parent.append(c); }
+    else if (tk.startsWith("**")) { const s = document.createElement("strong"); s.textContent = tk.slice(2, -2); parent.append(s); }
+    else if (tk.startsWith("*")) { const s = document.createElement("em"); s.textContent = tk.slice(1, -1); parent.append(s); }
+    else { const a = document.createElement("a"); a.textContent = tk.slice(1, tk.indexOf("]")); a.title = tk.slice(tk.indexOf("(") + 1, -1); parent.append(a); }
+    last = m.index + tk.length;
   }
   if (last < text.length) parent.append(document.createTextNode(text.slice(last)));
 }
@@ -396,16 +457,16 @@ function renderMarkdown(text, container) {
 
 /* ---------- run timeline ---------- */
 function formatDuration(ms) {
-  const t = Math.max(0, Math.round(ms / 1000));
-  const m = Math.floor(t / 60), s = t % 60;
-  return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  const total = Math.max(0, Math.round(ms / 1000));
+  const m = Math.floor(total / 60), s = total % 60;
+  return m > 0 ? t("dur.ms", { m, s }) : t("dur.s", { s });
 }
 function startRun() {
   const root = document.createElement("div"); root.className = "run";
   const head = document.createElement("button"); head.type = "button"; head.className = "run-head";
   const spinner = document.createElement("span"); spinner.className = "spinner";
-  const label = document.createElement("span"); label.className = "run-label"; label.textContent = "Running";
-  const timer = document.createElement("span"); timer.className = "run-timer"; timer.textContent = "0s";
+  const label = document.createElement("span"); label.className = "run-label"; label.textContent = t("run.running");
+  const timer = document.createElement("span"); timer.className = "run-timer"; timer.textContent = formatDuration(0);
   const chev = document.createElement("span"); chev.className = "chev"; chev.textContent = "▾";
   head.append(spinner, label, timer, chev);
   const body = document.createElement("div"); body.className = "run-body";
@@ -431,30 +492,32 @@ function addReasoningBlock(open) {
   const d = document.createElement("details"); d.className = "think";
   const s = document.createElement("summary");
   const chev = document.createElement("span"); chev.className = "chev"; chev.textContent = "▸";
-  const label = document.createElement("span"); label.textContent = "Thinking";
+  const label = document.createElement("span"); label.textContent = t("think.thinking");
   s.append(chev, label);
   const body = document.createElement("div"); body.className = "think-body";
   d.append(s, body); runBody().append(d);
   const block = { details: d, label, body, text: "", touched: false };
+  thinkBlocks.add(block);
   s.addEventListener("click", () => { block.touched = true; });
   d.open = open; scrollDown();
   return block;
 }
 function setReasoningText(block, text) {
   block.text = text; block.body.textContent = text;
-  block.label.textContent = `Thinking · ${text.length.toLocaleString()} chars`;
+  block.label.textContent = t("think.thinkingChars", { n: text.length.toLocaleString() });
   if (block.details.open) block.body.scrollTop = block.body.scrollHeight;
 }
 function collapseReasoning(block) {
   if (block !== null && !block.touched) {
     block.details.open = false;
-    block.label.textContent = `Thought · ${block.text.length.toLocaleString()} chars`;
+    block.label.textContent = t("think.thoughtChars", { n: block.text.length.toLocaleString() });
   }
 }
 function currentAssistant() {
   if (stepAssistant === null) {
     const body = document.createElement("div"); body.className = "answer";
     runBody().append(body); stepAssistant = { body, text: "" };
+    answerBlocks.add(stepAssistant);
   }
   return stepAssistant;
 }
@@ -467,11 +530,6 @@ function summarizeInput(input) {
   }
   return "";
 }
-const TOOL_VERBS = {
-  read: "Read", write: "Wrote", edit: "Edited", apply_patch: "Patched", bash: "Ran",
-  glob: "Searched files", grep: "Searched text", ls: "Listed", webfetch: "Fetched",
-  task: "Subagent", todo_write: "Updated tasks",
-};
 const WRITE_TOOLS = new Set(["write", "edit", "apply_patch"]);
 function addToolRow(name, input) {
   const d = document.createElement("details"); d.className = "tool-row running";
@@ -479,12 +537,13 @@ function addToolRow(name, input) {
   const dot = document.createElement("span"); dot.className = "tool-dot";
   const chev = document.createElement("span"); chev.className = "chev"; chev.textContent = "▸";
   const label = document.createElement("span"); label.className = "tool-label";
-  const verb = document.createElement("b"); verb.textContent = TOOL_VERBS[name] ?? name;
+  const verbKey = `verb.${name}`;
+  const verb = document.createElement("b"); verb.textContent = STRINGS[lang][verbKey] ?? STRINGS.en[verbKey] ?? name;
   const rest = summarizeInput(input);
   label.append(verb);
   if (rest !== "") label.append(document.createTextNode(` ${rest}`));
   s.append(dot, label, chev);
-  const output = document.createElement("div"); output.className = "tool-output"; output.textContent = "running...";
+  const output = document.createElement("div"); output.className = "tool-output"; output.textContent = t("tool.running");
   d.append(s, output); runBody().append(d); scrollDown();
   return { details: d, output, label };
 }
@@ -522,23 +581,23 @@ function handleEvent(event) {
     const target = row ?? addToolRow(event.name, null);
     target.details.classList.remove("running");
     target.details.classList.add(event.denied ? "denied" : event.isError ? "error" : "ok");
-    target.output.textContent = event.output === "" ? "(no output)" : event.output;
-    if (event.denied) target.label.append(document.createTextNode(" · denied"));
+    target.output.textContent = event.output === "" ? t("tool.noOutput") : event.output;
+    if (event.denied) target.label.append(document.createTextNode(` · ${t("tool.denied")}`));
     else if (first !== "" && event.isError) target.label.append(document.createTextNode(` · ${first.slice(0, 80)}`));
     return;
   }
   if (event.type === "step-end") { collapseReasoning(stepReasoning); return; }
-  if (event.type === "compaction") addNotice(`compacted ${event.tokensBefore} -> ${event.tokensAfter} estimated tokens`);
+  if (event.type === "compaction") addNotice(t("notice.compaction", { before: event.tokensBefore, after: event.tokensAfter }));
 }
 function handleFinish(payload) {
   const failed = payload.stopReason !== "completed";
-  endRun(failed ? `Stopped: ${payload.stopReason}` : "Completed", failed);
+  endRun(failed ? t("run.stopped", { reason: payload.stopReason }) : t("run.completed"), failed);
   setBusy(false);
   if (shellEl.classList.contains("right-open")) void loadTree();
   void refreshSessions();
 }
 function handleError(payload) {
-  endRun("Failed", true); setBusy(false);
+  endRun(t("run.failed"), true); setBusy(false);
   if (payload.message !== "request aborted") addNotice(payload.message, "error");
   void refreshSessions();
 }
@@ -548,11 +607,11 @@ function closeConfirm(approved) {
   if (pendingConfirm === null) return;
   const req = pendingConfirm; pendingConfirm = null; modalEl.hidden = true;
   void api.respond(req.id, approved);
-  addNotice(`${approved ? "allowed" : "denied"} ${req.tool}`, approved ? "" : "error");
+  addNotice(t(approved ? "notice.allowed" : "notice.denied", { tool: req.tool }), approved ? "" : "error");
 }
 function showConfirm(req) {
   pendingConfirm = req;
-  modalTitleEl.textContent = `Allow ${req.tool}?`;
+  modalTitleEl.textContent = t("allowTool", { tool: req.tool });
   modalBodyEl.replaceChildren();
   if (req.resources.length > 0) {
     const ul = document.createElement("ul");
@@ -572,14 +631,8 @@ function showInfo(title, lines) {
   for (const l of lines) { const p = document.createElement("p"); p.textContent = l; infoBodyEl.append(p); }
   infoEl.hidden = false; infoCloseEl.focus();
 }
-$("#nav-skills").addEventListener("click", () => showInfo("Skills", [
-  "Skills arrive with milestone M10a: markdown skill files discovered from the user config directory and .altiora/skills, injected into context on demand.",
-  "Nothing is installed yet. Track progress in docs/PLAN.md.",
-]));
-$("#nav-connections").addEventListener("click", () => showInfo("Connections", [
-  "MCP connections arrive with milestone M9: stdio servers declared in mcpServers, started only for trusted projects, tools exposed as mcp_<server>_<tool>.",
-  "No servers are configured in this workspace yet.",
-]));
+$("#nav-skills").addEventListener("click", () => showInfo(t("info.skills.title"), [t("info.skills.1"), t("info.skills.2")]));
+$("#nav-connections").addEventListener("click", () => showInfo(t("info.connections.title"), [t("info.connections.1"), t("info.connections.2")]));
 infoCloseEl.addEventListener("click", () => { infoEl.hidden = true; });
 infoEl.addEventListener("click", (e) => { if (e.target === infoEl) infoEl.hidden = true; });
 
@@ -587,34 +640,41 @@ infoEl.addEventListener("click", (e) => { if (e.target === infoEl) infoEl.hidden
 function shortId(id) { return id.length > 12 ? id.slice(0, 12) : id; }
 function relativeTime(ms) {
   const d = Date.now() - ms; const m = Math.floor(d / 60000);
-  if (m < 1) return "just now";
-  if (m < 60) return `${m}m ago`;
+  if (m < 1) return t("time.now");
+  if (m < 60) return t("time.m", { n: m });
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  if (h < 24) return t("time.h", { n: h });
   const days = Math.floor(h / 24);
-  if (days < 7) return `${days}d ago`;
-  return new Date(ms).toLocaleDateString();
+  if (days < 7) return t("time.d", { n: days });
+  return new Date(ms).toLocaleDateString(lang === "zh" ? "zh-CN" : "en-US");
 }
 async function refreshSessions() {
   const sessions = await api.sessions();
   sessionsEl.replaceChildren();
   if (sessions.length === 0) {
-    const e = document.createElement("div"); e.className = "session-empty"; e.textContent = "No sessions yet";
+    const e = document.createElement("div"); e.className = "session-empty"; e.textContent = t("sessions.none");
     sessionsEl.append(e); return;
   }
   for (const s of sessions) {
     const b = document.createElement("button"); b.type = "button"; b.className = "session-item";
     if (s.id === currentSessionId) b.classList.add("active");
-    const t = document.createElement("span"); t.className = "session-title-text";
-    t.textContent = s.title || `Session ${shortId(s.id)}`;
+    const ti = document.createElement("span"); ti.className = "session-title-text";
+    ti.textContent = s.title || t("session.fallback", { id: shortId(s.id) });
     const meta = document.createElement("span"); meta.className = "session-meta";
     meta.textContent = relativeTime(s.updatedAt);
-    b.append(t, meta);
+    b.append(ti, meta);
     b.addEventListener("click", () => void openSession(s.id));
     sessionsEl.append(b);
   }
 }
+function clearTimeline() {
+  for (const b of thinkBlocks) b.details.remove();
+  thinkBlocks.clear();
+  for (const a of answerBlocks) a.body.remove();
+  answerBlocks.clear();
+}
 function renderHistory(history) {
+  clearTimeline();
   resetResultFiles();
   resetUsedTools();
   if (history.length === 0) { restoreEmpty(); return; }
@@ -642,7 +702,7 @@ function renderHistory(history) {
       if (run === null) startRun();
       if (typeof m.reasoning === "string" && m.reasoning !== "") {
         const b = addReasoningBlock(false); setReasoningText(b, m.reasoning);
-        b.label.textContent = `Thought · ${m.reasoning.length.toLocaleString()} chars`;
+        b.label.textContent = t("think.thoughtChars", { n: m.reasoning.length.toLocaleString() });
       }
       for (const p of m.content) {
         if (p.type !== "tool_use") continue;
@@ -665,21 +725,22 @@ function renderHistory(history) {
     const summary = m.content.length > 160 ? `${m.content.slice(0, 160)}...` : m.content;
     addNotice(summary);
   }
-  endRun("Completed", false); scrollDown();
+  endRun(t("run.completed"), false); scrollDown();
 }
 async function openSession(id) {
   if (busy) return;
   const r = await api.openSession(id);
   if (!r.ok) { addNotice(r.message, "error"); return; }
   currentSessionId = r.sessionId;
-  sessionTitleEl.textContent = `Session ${shortId(r.sessionId)}`;
+  sessionTitleEl.textContent = t("session.fallback", { id: shortId(r.sessionId) });
   toolRows.clear(); renderHistory(r.history);
   await refreshSessions();
 }
 
 /* ---------- mode ---------- */
 function applyModeUI(mode) {
-  modeChipEl.textContent = mode;
+  currentMode = mode;
+  modeChipEl.textContent = t(`mode.${mode}`);
   modeChipEl.className = `chip mode-${mode}`;
   for (const tab of modeTabs) tab.classList.toggle("active", tab.dataset.mode === mode);
 }
@@ -691,15 +752,14 @@ async function setMode(mode) {
 for (const tab of modeTabs) tab.addEventListener("click", () => void setMode(tab.dataset.mode));
 modeChipEl.addEventListener("click", () => {
   const order = ["default", "plan", "unattended"];
-  const cur = modeChipEl.textContent;
-  void setMode(order[(order.indexOf(cur) + 1) % order.length]);
+  void setMode(order[(order.indexOf(currentMode) + 1) % order.length]);
 });
 
 /* ---------- state ---------- */
 function setBusy(v) {
   busy = v;
   sendEl.hidden = v; abortEl.hidden = !v; promptEl.disabled = v;
-  statusTextEl.textContent = v ? "running" : statusTextEl.dataset.idle ?? "idle";
+  statusTextEl.textContent = v ? t("status.running") : statusTextEl.dataset.idle ?? t("status.starting");
 }
 async function refreshState() {
   const r = await api.state();
@@ -713,14 +773,15 @@ async function refreshState() {
   const s = r.state;
   currentSessionId = s.sessionId;
   statusDotEl.classList.add("online"); statusDotEl.classList.remove("offline");
-  const idle = `${s.model} · ${Math.round(s.contextWindow / 1000)}k ctx`;
-  statusTextEl.textContent = idle; statusTextEl.dataset.idle = idle;
+  const idle = t("status.ctx", { model: s.model, k: Math.round(s.contextWindow / 1000) });
+  statusTextEl.textContent = busy ? t("status.running") : idle;
+  statusTextEl.dataset.idle = idle;
   workspaceNameEl.textContent = s.workspace.split(/[\\/]/).pop() ?? s.workspace;
   workspaceNameEl.title = s.workspace;
-  sessionTitleEl.textContent = `Session ${shortId(s.sessionId)}`;
+  sessionTitleEl.textContent = t("session.fallback", { id: shortId(s.sessionId) });
   versionEl.textContent = `v${s.version}`;
   modelChipEl.textContent = s.model;
-  modelChipEl.title = `Context window ${s.contextWindow.toLocaleString()} (${s.contextWindowSource})`;
+  modelChipEl.title = t("model.title", { n: s.contextWindow.toLocaleString(), source: s.contextWindowSource });
   applyModeUI(s.permissionMode);
   promptEl.disabled = false; sendEl.disabled = false;
   await refreshSessions();
@@ -753,14 +814,14 @@ composerEl.addEventListener("submit", async (e) => {
   if (!r.ok && r.message !== "a turn is already running" && r.message !== "request aborted") addNotice(r.message, "error");
   setBusy(false);
 });
-abortEl.addEventListener("click", () => { addNotice("stopping..."); void api.abort(); });
+abortEl.addEventListener("click", () => { addNotice(t("notice.stopping")); void api.abort(); });
 newSessionEl.addEventListener("click", async () => {
   if (busy) return;
   const r = await api.newSession();
   if (!r.ok) { addNotice(r.message, "error"); return; }
   currentSessionId = r.sessionId;
-  sessionTitleEl.textContent = "New task";
-  toolRows.clear(); resetResultFiles(); resetUsedTools(); renderTodos(null); restoreEmpty();
+  sessionTitleEl.textContent = t("session.new");
+  toolRows.clear(); clearTimeline(); resetResultFiles(); resetUsedTools(); renderTodos(null); restoreEmpty();
   await refreshSessions();
 });
 async function pickWorkspace() {
@@ -769,16 +830,16 @@ async function pickWorkspace() {
   if (r.canceled) return;
   if (!r.ok) { addNotice(r.message, "error"); return; }
   currentSessionId = r.state.sessionId;
-  toolRows.clear(); resetResultFiles(); resetUsedTools(); renderTodos(null); restoreEmpty();
+  toolRows.clear(); clearTimeline(); resetResultFiles(); resetUsedTools(); renderTodos(null); restoreEmpty();
   treeLoaded = false;
   await refreshState();
   if (shellEl.classList.contains("right-open")) await loadTree();
 }
 pickWorkspaceEl.addEventListener("click", () => void pickWorkspace());
 composerWorkspaceEl.addEventListener("click", () => void pickWorkspace());
-modelChipEl.addEventListener("click", () => showInfo("Model", [
-  `Active model: ${modelChipEl.textContent}.`,
-  "Mid-session model switching and the model list arrive with milestone M12; today the model comes from config, environment or CLI flags.",
+modelChipEl.addEventListener("click", () => showInfo(t("info.model.title"), [
+  t("info.model.1", { model: modelChipEl.textContent }),
+  t("info.model.2"),
 ]));
 
 promptEl.addEventListener("keydown", (e) => {
@@ -797,8 +858,10 @@ document.addEventListener("keydown", (e) => {
     return;
   }
   if (!previewEl.hidden && e.key === "Escape") { e.preventDefault(); closePreview(); return; }
+  if (!settingsEl.hidden && e.key === "Escape") { e.preventDefault(); settingsEl.hidden = true; return; }
   if (!infoEl.hidden && e.key === "Escape") { e.preventDefault(); infoEl.hidden = true; return; }
   if (shellEl.classList.contains("right-open") && e.key === "Escape") { e.preventDefault(); setRightPanel(false); return; }
 });
 
+applyI18n();
 void refreshState();

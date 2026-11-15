@@ -426,6 +426,14 @@ button { font: inherit; color: inherit; background: none; border: none; padding:
   white-space: pre-wrap; word-break: break-word;
 }
 
+.foot-actions { display: flex; gap: 2px; }
+
+.settings-body { display: flex; flex-direction: column; gap: 14px; }
+.settings-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.settings-label { color: var(--muted); font-size: 12.5px; }
+.seg { display: flex; background: var(--hairline); border-radius: 9px; padding: 3px; }
+.seg .mode-tab { flex: none; padding: 5px 14px; }
+
 @media (max-width: 900px) {
   .sidebar { position: absolute; height: 100%; box-shadow: var(--shadow); }
   .shell.right-open .rightbar { width: 280px; min-width: 280px; }
