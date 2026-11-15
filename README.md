@@ -95,6 +95,17 @@ altiora run "try another approach" --fork <id>
 
 For scripts, `--output-format json` prints one result object and `--output-format stream-json` prints NDJSON events (`system`, `assistant`, `user`, `result`) with a stable `session_id`.
 
+Scheduled tasks live in `schedules.json` in the user data directory and run headless under the unattended policy (only allow-listed writes execute):
+
+```sh
+altiora schedule add nightly "0 3 * * *" "summarize the repo" --allow "write(docs/**)"
+altiora schedule list
+altiora schedule run-now <id>
+altiora schedule watch
+```
+
+The desktop app runs the same scheduler in the background and exposes a Schedules manager in the sidebar.
+
 ## Desktop app
 
 `desktop/` is an Electron shell over the same core. The agent loop runs in the main process and streams `RunEvent`s to the renderer over IPC; approvals round-trip through a modal, and the preload bridge exposes nothing beyond the channels the window uses. There is no HTTP listener. The window has a collapsible session sidebar, a workspace picker, a file tree with a read-only preview, and renders reasoning separately from the answer.

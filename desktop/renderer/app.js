@@ -666,6 +666,99 @@ $("#nav-connections").addEventListener("click", () => showInfo(t("info.connectio
 infoCloseEl.addEventListener("click", () => { infoEl.hidden = true; });
 infoEl.addEventListener("click", (e) => { if (e.target === infoEl) infoEl.hidden = true; });
 
+/* ---------- schedules ---------- */
+const schedulesEl = $("#schedules");
+const schedListEl = $("#sched-list");
+const schedCloseEl = $("#sched-close");
+const schedAddEl = $("#sched-add");
+const schedNameEl = $("#sched-name");
+const schedCronEl = $("#sched-cron");
+const schedPromptEl = $("#sched-prompt");
+const schedAllowEl = $("#sched-allow");
+
+function fmtTime(ms) {
+  return new Date(ms).toLocaleString(lang === "zh" ? "zh-CN" : "en-US");
+}
+async function renderSchedules() {
+  const entries = await api.schedules();
+  schedListEl.replaceChildren();
+  if (!Array.isArray(entries) || entries.length === 0) {
+    const m = document.createElement("div");
+    m.className = "panel-muted";
+    m.textContent = t("sched.empty");
+    schedListEl.append(m);
+    return;
+  }
+  for (const entry of entries) {
+    const row = document.createElement("div");
+    row.className = `sched-row${entry.enabled ? "" : " off"}`;
+    const info = document.createElement("div");
+    info.className = "sched-info";
+    const name = document.createElement("div");
+    name.className = "sched-name";
+    name.textContent = entry.name;
+    const meta = document.createElement("div");
+    meta.className = "sched-meta";
+    const next = entry.nextRunAt ? t("sched.next", { time: fmtTime(entry.nextRunAt) }) : "";
+    const last = entry.lastRunAt ? t("sched.last", { time: fmtTime(entry.lastRunAt), status: entry.lastStatus ?? "" }) : "";
+    meta.textContent = `${entry.cron}  ${next}  ${last}`;
+    info.append(name, meta);
+    const actions = document.createElement("div");
+    actions.className = "sched-actions";
+    const run = document.createElement("button");
+    run.type = "button";
+    run.textContent = t("sched.run");
+    run.addEventListener("click", async () => {
+      run.textContent = t("sched.running");
+      run.disabled = true;
+      await api.runSchedule(entry.id);
+      await renderSchedules();
+    });
+    const toggle = document.createElement("button");
+    toggle.type = "button";
+    toggle.textContent = entry.enabled ? t("sched.disable") : t("sched.enable");
+    toggle.addEventListener("click", async () => {
+      await api.toggleSchedule(entry.id, !entry.enabled);
+      await renderSchedules();
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = t("sched.remove");
+    remove.addEventListener("click", async () => {
+      await api.removeSchedule(entry.id);
+      await renderSchedules();
+    });
+    actions.append(run, toggle, remove);
+    row.append(info, actions);
+    schedListEl.append(row);
+  }
+}
+$("#nav-schedules").addEventListener("click", () => {
+  schedulesEl.hidden = false;
+  void renderSchedules();
+  schedCloseEl.focus();
+});
+schedCloseEl.addEventListener("click", () => { schedulesEl.hidden = true; });
+schedulesEl.addEventListener("click", (e) => { if (e.target === schedulesEl) schedulesEl.hidden = true; });
+schedAddEl.addEventListener("click", async () => {
+  const allow = schedAllowEl.value.split(",").map((v) => v.trim()).filter((v) => v !== "");
+  const result = await api.addSchedule({
+    name: schedNameEl.value,
+    cron: schedCronEl.value,
+    prompt: schedPromptEl.value,
+    allow,
+  });
+  if (result.ok) {
+    schedNameEl.value = "";
+    schedCronEl.value = "";
+    schedPromptEl.value = "";
+    schedAllowEl.value = "";
+    await renderSchedules();
+  } else {
+    addNotice(result.message, "error");
+  }
+});
+
 /* ---------- sessions ---------- */
 function shortId(id) { return id.length > 12 ? id.slice(0, 12) : id; }
 function relativeTime(ms) {
@@ -889,6 +982,7 @@ document.addEventListener("keydown", (e) => {
   }
   if (!previewEl.hidden && e.key === "Escape") { e.preventDefault(); closePreview(); return; }
   if (!settingsEl.hidden && e.key === "Escape") { e.preventDefault(); settingsEl.hidden = true; return; }
+  if (!schedulesEl.hidden && e.key === "Escape") { e.preventDefault(); schedulesEl.hidden = true; return; }
   if (!infoEl.hidden && e.key === "Escape") { e.preventDefault(); infoEl.hidden = true; return; }
   if (shellEl.classList.contains("right-open") && e.key === "Escape") { e.preventDefault(); setRightPanel(false); return; }
 });

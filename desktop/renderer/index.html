@@ -47,6 +47,13 @@
             </svg>
             <span data-i18n="nav.connections">连接</span>
           </button>
+          <button type="button" class="nav-row" id="nav-schedules">
+            <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden="true">
+              <circle cx="8" cy="8" r="5.6" stroke="currentColor" stroke-width="1.2" />
+              <path d="M8 4.8V8l2.2 1.6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" />
+            </svg>
+            <span data-i18n="nav.schedules">定时计划</span>
+          </button>
         </nav>
 
         <div class="side-scroll">
@@ -285,6 +292,26 @@
         </div>
         <div class="modal-actions">
           <button type="button" class="ghost" id="settings-close" data-i18n="close">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-backdrop" id="schedules" hidden>
+      <div class="modal sched-modal">
+        <div class="modal-title" data-i18n="sched.title">定时计划</div>
+        <div class="sched-list" id="sched-list"></div>
+        <div class="sched-form">
+          <input id="sched-name" type="text" data-i18n-placeholder="sched.name" placeholder="名称" />
+          <input id="sched-cron" type="text" data-i18n-placeholder="sched.cron" placeholder="Cron（5 段）" />
+          <textarea id="sched-prompt" rows="2" data-i18n-placeholder="sched.prompt" placeholder="提示词"></textarea>
+          <input id="sched-allow" type="text" data-i18n-placeholder="sched.allow" placeholder="允许规则（逗号分隔）" />
+          <div class="sched-form-actions">
+            <span class="panel-muted" data-i18n="sched.hint">以 unattended 策略无头执行；仅允许规则内的写入会执行。</span>
+            <button type="button" id="sched-add" data-i18n="sched.add">添加</button>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="ghost" id="sched-close" data-i18n="close">关闭</button>
         </div>
       </div>
     </div>

@@ -3,8 +3,18 @@ import { readFile, readdir, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { AgentService } from "./agent.js";
+import { resolveAppPaths } from "../core-dist/config/paths.js";
+import { nextRun } from "../core-dist/schedule/cron.js";
+import { Scheduler, recomputeNext } from "../core-dist/schedule/scheduler.js";
+import { loadSchedules, newScheduleId, saveSchedules, type ScheduleEntry } from "../core-dist/schedule/store.js";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+
+let scheduler: Scheduler | undefined;
+
+function scheduleDir(): string {
+  return resolveAppPaths(process.env).dataDir;
+}
 
 let window: BrowserWindow | undefined;
 let service: AgentService | undefined;
@@ -173,6 +183,69 @@ ipcMain.handle("altiora:open-folder", async (_event, target: unknown) => {
   return error === "" ? { ok: true } : { ok: false, message: error };
 });
 
+ipcMain.handle("altiora:schedules", () => loadSchedules(scheduleDir()));
+
+ipcMain.handle("altiora:schedule-add", (_event, payload: unknown) => {
+  if (typeof payload !== "object" || payload === null) return { ok: false, message: "invalid payload" };
+  const record = payload as Record<string, unknown>;
+  const name = typeof record["name"] === "string" ? record["name"].trim() : "";
+  const cron = typeof record["cron"] === "string" ? record["cron"].trim() : "";
+  const prompt = typeof record["prompt"] === "string" ? record["prompt"].trim() : "";
+  const allow = Array.isArray(record["allow"]) ? record["allow"].filter((v): v is string => typeof v === "string") : [];
+  if (name === "" || cron === "" || prompt === "") return { ok: false, message: "name, cron and prompt are required" };
+  try {
+    nextRun(cron, new Date());
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+  const entry = recomputeNext(
+    {
+      id: newScheduleId(),
+      name,
+      cron,
+      prompt,
+      cwd: service?.state().workspace ?? process.cwd(),
+      enabled: true,
+      allow,
+      createdAt: Date.now(),
+    },
+    Date.now(),
+  );
+  saveSchedules(scheduleDir(), [...loadSchedules(scheduleDir()), entry]);
+  return { ok: true, entry };
+});
+
+ipcMain.handle("altiora:schedule-remove", (_event, id: unknown) => {
+  if (typeof id !== "string") return { ok: false, message: "invalid id" };
+  const entries = loadSchedules(scheduleDir());
+  const next = entries.filter((entry) => entry.id !== id);
+  if (next.length === entries.length) return { ok: false, message: `schedule not found: ${id}` };
+  saveSchedules(scheduleDir(), next);
+  return { ok: true };
+});
+
+ipcMain.handle("altiora:schedule-toggle", (_event, payload: unknown) => {
+  if (typeof payload !== "object" || payload === null) return { ok: false, message: "invalid payload" };
+  const record = payload as Record<string, unknown>;
+  const id = record["id"];
+  const enabled = record["enabled"];
+  if (typeof id !== "string" || typeof enabled !== "boolean") return { ok: false, message: "invalid payload" };
+  const entries = loadSchedules(scheduleDir());
+  const target = entries.find((entry) => entry.id === id);
+  if (target === undefined) return { ok: false, message: `schedule not found: ${id}` };
+  saveSchedules(
+    scheduleDir(),
+    entries.map((entry) => (entry.id === id ? recomputeNext({ ...entry, enabled }, Date.now()) : entry)),
+  );
+  return { ok: true };
+});
+
+ipcMain.handle("altiora:schedule-run", async (_event, id: unknown) => {
+  if (typeof id !== "string") return { ok: false, message: "invalid id" };
+  if (scheduler === undefined) return { ok: false, message: "scheduler not ready" };
+  return scheduler.runNow(id);
+});
+
 ipcMain.handle("altiora:confirm-response", (_event, payload: unknown) => {
   if (typeof payload !== "object" || payload === null) return { ok: false };
   const record = payload as Record<string, unknown>;
@@ -185,6 +258,9 @@ ipcMain.handle("altiora:confirm-response", (_event, payload: unknown) => {
 void app.whenReady().then(async () => {
   if (process.platform !== "darwin") Menu.setApplicationMenu(null);
   createWindow();
+
+  scheduler = new Scheduler({ env: process.env, version: app.getVersion() });
+  scheduler.start();
 
   try {
     service = await AgentService.create({
@@ -205,5 +281,6 @@ void app.whenReady().then(async () => {
 });
 
 app.on("window-all-closed", () => {
+  scheduler?.stop();
   if (process.platform !== "darwin") app.quit();
 });

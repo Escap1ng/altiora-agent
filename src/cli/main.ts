@@ -4,6 +4,7 @@ import { chatCommand } from "./chat.ts";
 import { configCommand } from "./config-command.ts";
 import { initCommand } from "./init.ts";
 import { runCommand } from "./run.ts";
+import { scheduleCommand } from "./schedule.ts";
 import { sessionsCommand } from "./sessions.ts";
 
 const EXIT_OK = 0;
@@ -26,6 +27,7 @@ Commands:
   run <prompt>          Run a headless agent turn
   chat                  Start an interactive session
   sessions list|show    Inspect saved sessions
+  schedule ...          Manage scheduled tasks (list/add/remove/enable/disable/run-now/watch)
   config path|get|set   Inspect or change configuration
   init                  Write project config and AGENTS.md
 
@@ -86,6 +88,14 @@ export async function main(argv: string[]): Promise<number> {
         cwd: process.cwd(),
         stdout: process.stdout,
         stderr: process.stderr,
+      });
+    case "schedule":
+      return scheduleCommand(rest, {
+        cwd: process.cwd(),
+        env: process.env,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        version: pkg.version,
       });
     case "config":
       return configCommand(rest, {

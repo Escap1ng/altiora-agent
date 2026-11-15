@@ -431,6 +431,32 @@ button { font: inherit; color: inherit; background: none; border: none; padding:
 .seg { display: flex; background: var(--hairline); border-radius: 9px; padding: 3px; }
 .seg .mode-tab { flex: none; padding: 5px 14px; }
 
+.sched-modal { width: min(640px, calc(100vw - 48px)); }
+.sched-list { display: flex; flex-direction: column; gap: 8px; max-height: 300px; overflow-y: auto; }
+.sched-row {
+  display: flex; align-items: center; gap: 10px;
+  border: 1px solid var(--hairline); border-radius: 10px; padding: 8px 10px;
+}
+.sched-row.off { opacity: 0.55; }
+.sched-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.sched-name { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-meta { color: var(--muted); font-size: 11.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sched-actions { display: flex; gap: 4px; }
+.sched-actions button {
+  padding: 4px 8px; border-radius: 7px; border: 1px solid var(--hairline);
+  color: var(--muted); font-size: 11.5px;
+}
+.sched-actions button:hover { color: var(--ink); border-color: var(--faint); }
+.sched-form { display: flex; flex-direction: column; gap: 8px; border-top: 1px solid var(--hairline); padding-top: 12px; }
+.sched-form input, .sched-form textarea {
+  width: 100%; border: 1px solid var(--hairline); border-radius: 9px;
+  background: var(--surface-2); color: var(--ink); padding: 7px 10px;
+  font: 12.5px/1.5 inherit; font-family: inherit; outline: none; resize: vertical;
+}
+.sched-form input:focus, .sched-form textarea:focus { border-color: var(--accent); }
+.sched-form-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.sched-form-actions button { padding: 6px 14px; border-radius: 9px; background: var(--accent); color: #fff; font-weight: 550; }
+
 @media (max-width: 900px) {
   .sidebar { position: absolute; height: 100%; box-shadow: var(--shadow); }
   .shell.right-open .rightbar { width: 280px; min-width: 280px; }
