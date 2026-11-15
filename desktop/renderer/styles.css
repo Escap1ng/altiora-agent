@@ -156,14 +156,44 @@ button { font: inherit; color: inherit; background: none; border: none; padding:
   display: none; color: var(--faint); width: 12px; flex: none;
   transition: transform 140ms ease-out;
 }
-.project-row .folder-ico { display: grid; place-items: center; color: var(--accent); width: 14px; flex: none; }
+.project-row .folder-ico {
+  display: grid; place-items: center; color: var(--ink);
+  width: 15px; height: 15px; flex: none;
+}
 .project-row:hover .chev { display: grid; }
 .project-row:hover .folder-ico { display: none; }
 .project.collapsed .project-row .chev { transform: rotate(-90deg); }
-.project.collapsed .sessions { display: none; }
 .project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-.sessions { display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px; }
+.folder-ico { position: relative; }
+.folder-ico svg { grid-area: 1 / 1; transition: opacity 160ms ease-out; }
+.folder-ico .ico-open { opacity: 0; }
+.project:not(.collapsed) .folder-ico .ico-closed { opacity: 0; }
+.project:not(.collapsed) .folder-ico .ico-open { opacity: 1; }
+
+.sessions-wrap {
+  display: grid; grid-template-rows: 1fr;
+  transition: grid-template-rows 280ms cubic-bezier(0.24, 0.9, 0.28, 1), opacity 200ms ease-out;
+}
+.project.collapsed .sessions-wrap { grid-template-rows: 0fr; opacity: 0; }
+.sessions {
+  display: flex; flex-direction: column; gap: 2px; padding: 2px 0 4px;
+  min-height: 0; overflow: hidden;
+}
+.project.just-opened .session-item { animation: session-in 260ms cubic-bezier(0.22, 0.9, 0.3, 1) backwards; }
+.project.just-opened .session-item:nth-child(1) { animation-delay: 20ms; }
+.project.just-opened .session-item:nth-child(2) { animation-delay: 55ms; }
+.project.just-opened .session-item:nth-child(3) { animation-delay: 90ms; }
+.project.just-opened .session-item:nth-child(4) { animation-delay: 125ms; }
+.project.just-opened .session-item:nth-child(n+5) { animation-delay: 155ms; }
+@keyframes session-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sessions-wrap, .folder-ico svg { transition: none; }
+  .project.just-opened .session-item { animation: none; }
+}
 .session-item {
   display: flex; align-items: center; gap: 8px;
   text-align: left; padding: 7px 10px 7px 26px; border-radius: 8px;

@@ -183,9 +183,18 @@ collapseSidebarEl.addEventListener("click", () => setSidebar(false));
 toggleRightEl.addEventListener("click", () => setRightPanel(!shellEl.classList.contains("right-open")));
 closeRightEl.addEventListener("click", () => setRightPanel(false));
 
+let folderAnimTimer = 0;
 projectToggleEl.addEventListener("click", () => {
-  const collapsed = projectToggleEl.parentElement.classList.toggle("collapsed");
+  const group = projectToggleEl.parentElement;
+  const collapsed = group.classList.toggle("collapsed");
   projectToggleEl.setAttribute("aria-expanded", String(!collapsed));
+  window.clearTimeout(folderAnimTimer);
+  group.classList.remove("just-opened");
+  if (!collapsed) {
+    void group.offsetHeight;
+    group.classList.add("just-opened");
+    folderAnimTimer = window.setTimeout(() => group.classList.remove("just-opened"), 520);
+  }
 });
 wsSearchEl.addEventListener("click", () => {
   wsSearchBoxEl.hidden = !wsSearchBoxEl.hidden;
