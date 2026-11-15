@@ -23,12 +23,6 @@
           </button>
         </div>
 
-        <div class="mode-switch" role="tablist" data-i18n-aria="mode.aria" aria-label="权限模式">
-          <button type="button" class="mode-tab" data-mode="default" role="tab" data-i18n="mode.default">默认</button>
-          <button type="button" class="mode-tab" data-mode="plan" role="tab" data-i18n="mode.plan">计划</button>
-          <button type="button" class="mode-tab" data-mode="unattended" role="tab" data-i18n="mode.unattended">自动</button>
-        </div>
-
         <button type="button" class="new-task" id="new-session">
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true">
             <path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
@@ -127,16 +121,24 @@
           </div>
         </header>
 
+        <div class="center">
         <section class="messages" id="messages">
           <div class="empty">
-            <div class="empty-mark">A</div>
-            <div class="empty-title" data-i18n="empty.title">随时可以开始</div>
-            <div class="empty-body" data-i18n="empty.body">让 Altiora 查看或修改工作区。</div>
-            <div class="suggestions">
-              <button type="button" class="suggestion" data-sug="1" data-prompt="总结这个仓库及其架构" data-i18n="sug1.label">总结这个仓库</button>
-              <button type="button" class="suggestion" data-sug="2" data-prompt="找出代码库中最复杂的函数并讲解" data-i18n="sug2.label">讲解最难的代码</button>
-              <button type="button" class="suggestion" data-sug="3" data-prompt="列出最近变更的文件及其作用" data-i18n="sug3.label">最近改了什么</button>
+            <div class="home-hero">
+              <span class="home-mark" aria-hidden="true">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                  <path d="M12 2.5l2.2 7.3 7.3 2.2-7.3 2.2-2.2 7.3-2.2-7.3-7.3-2.2 7.3-2.2z" fill="url(#homeGrad)" />
+                  <defs>
+                    <linearGradient id="homeGrad" x1="4" y1="4" x2="20" y2="20">
+                      <stop stop-color="#2f6bff" />
+                      <stop offset="1" stop-color="#7b5cff" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              </span>
+              <h1 class="home-slogan" data-i18n="home.slogan">Altiora，你的工作助理</h1>
             </div>
+            <p class="home-sub" data-i18n="home.sub">描述任务，我来查看、修改并交付。</p>
           </div>
         </section>
 
@@ -169,6 +171,7 @@
           </div>
           <div class="composer-hint" data-i18n="composer.hint">Enter 发送，Shift+Enter 换行</div>
         </form>
+        </div>
       </main>
 
       <aside class="rightbar" id="rightbar">

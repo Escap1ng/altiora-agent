@@ -38,7 +38,6 @@ const versionEl = $("#version");
 const themeToggleEl = $("#theme-toggle");
 const modeChipEl = $("#mode-chip");
 const modelChipEl = $("#model-chip");
-const modeTabs = Array.from(document.querySelectorAll(".mode-switch .mode-tab"));
 const modalEl = $("#modal");
 const modalTitleEl = $("#modal-title");
 const modalBodyEl = $("#modal-body");
@@ -96,6 +95,7 @@ function applyI18n() {
   for (const el of document.querySelectorAll("[data-i18n-aria]")) el.setAttribute("aria-label", t(el.dataset.i18nAria));
   for (const el of document.querySelectorAll("[data-i18n-placeholder]")) el.placeholder = t(el.dataset.i18nPlaceholder);
   for (const el of document.querySelectorAll(".suggestion[data-sug]")) el.dataset.prompt = t(`sug${el.dataset.sug}.prompt`);
+  renderHomeSuggestions();
   applyModeUI(currentMode);
   for (const tab of langTabs) tab.classList.toggle("active", tab.dataset.lang === lang);
   const theme = document.documentElement.dataset.theme === "dark" ? "dark" : "light";
@@ -375,14 +375,30 @@ function stream() {
   return el;
 }
 function scrollDown() { messagesEl.scrollTop = messagesEl.scrollHeight; }
-function restoreEmpty() {
-  messagesEl.replaceChildren();
-  const empty = document.createElement("div");
-  empty.className = "empty";
-  const mark = document.createElement("div"); mark.className = "empty-mark"; mark.textContent = "A";
-  const title = document.createElement("div"); title.className = "empty-title"; title.textContent = t("empty.title");
-  const body = document.createElement("div"); body.className = "empty-body"; body.textContent = t("empty.body");
-  const sug = document.createElement("div"); sug.className = "suggestions";
+function setHome(on) {
+  const was = shellEl.classList.contains("home");
+  if (was && !on) {
+    const first = composerEl.getBoundingClientRect().top;
+    shellEl.classList.remove("home");
+    const last = composerEl.getBoundingClientRect().top;
+    const dy = first - last;
+    if (dy !== 0) {
+      composerEl.style.transition = "none";
+      composerEl.style.transform = `translateY(${dy}px)`;
+      void composerEl.offsetHeight;
+      composerEl.style.transition = "transform 320ms cubic-bezier(0.22, 0.8, 0.36, 1)";
+      composerEl.style.transform = "";
+      window.setTimeout(() => { composerEl.style.transition = ""; }, 360);
+    }
+  } else {
+    shellEl.classList.toggle("home", on);
+  }
+}
+function renderHomeSuggestions() {
+  composerEl.querySelector(".suggestions")?.remove();
+  if (!shellEl.classList.contains("home")) return;
+  const sug = document.createElement("div");
+  sug.className = "suggestions";
   for (const i of [1, 2, 3]) {
     const chip = document.createElement("button");
     chip.type = "button"; chip.className = "suggestion"; chip.dataset.sug = String(i);
@@ -390,10 +406,24 @@ function restoreEmpty() {
     chip.textContent = t(`sug${i}.label`);
     sug.append(chip);
   }
-  empty.append(mark, title, body, sug);
-  messagesEl.append(empty);
+  composerEl.append(sug);
 }
-messagesEl.addEventListener("click", (e) => {
+function restoreEmpty() {
+  messagesEl.replaceChildren();
+  const empty = document.createElement("div");
+  empty.className = "empty";
+  const hero = document.createElement("div"); hero.className = "home-hero";
+  const mark = document.createElement("span"); mark.className = "home-mark"; mark.setAttribute("aria-hidden", "true");
+  mark.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5l2.2 7.3 7.3 2.2-7.3 2.2-2.2 7.3-2.2-7.3-7.3-2.2 7.3-2.2z" fill="url(#homeGradDyn)"/><defs><linearGradient id="homeGradDyn" x1="4" y1="4" x2="20" y2="20"><stop stop-color="#2f6bff"/><stop offset="1" stop-color="#7b5cff"/></linearGradient></defs></svg>';
+  const slogan = document.createElement("h1"); slogan.className = "home-slogan"; slogan.textContent = t("home.slogan");
+  hero.append(mark, slogan);
+  const sub = document.createElement("p"); sub.className = "home-sub"; sub.textContent = t("home.sub");
+  empty.append(hero, sub);
+  messagesEl.append(empty);
+  setHome(true);
+  renderHomeSuggestions();
+}
+document.addEventListener("click", (e) => {
   const chip = e.target.closest(".suggestion");
   if (chip === null || busy) return;
   promptEl.value = chip.dataset.prompt ?? "";
@@ -678,6 +708,7 @@ function renderHistory(history) {
   resetResultFiles();
   resetUsedTools();
   if (history.length === 0) { restoreEmpty(); return; }
+  setHome(false); renderHomeSuggestions();
   messagesEl.replaceChildren();
   const toolResults = new Map();
   const writeCalls = new Map();
@@ -742,14 +773,12 @@ function applyModeUI(mode) {
   currentMode = mode;
   modeChipEl.textContent = t(`mode.${mode}`);
   modeChipEl.className = `chip mode-${mode}`;
-  for (const tab of modeTabs) tab.classList.toggle("active", tab.dataset.mode === mode);
 }
 async function setMode(mode) {
   const r = await api.setMode(mode);
   if (r.ok) applyModeUI(mode);
   else addNotice(r.message, "error");
 }
-for (const tab of modeTabs) tab.addEventListener("click", () => void setMode(tab.dataset.mode));
 modeChipEl.addEventListener("click", () => {
   const order = ["default", "plan", "unattended"];
   void setMode(order[(order.indexOf(currentMode) + 1) % order.length]);
@@ -809,6 +838,7 @@ composerEl.addEventListener("submit", async (e) => {
   const text = promptEl.value.trim();
   if (text === "" || busy) return;
   promptEl.value = ""; autosize();
+  setHome(false); renderHomeSuggestions();
   addUser(text); toolRows.clear(); startRun(); setBusy(true);
   const r = await api.run(text);
   if (!r.ok && r.message !== "a turn is already running" && r.message !== "request aborted") addNotice(r.message, "error");
@@ -863,5 +893,6 @@ document.addEventListener("keydown", (e) => {
   if (shellEl.classList.contains("right-open") && e.key === "Escape") { e.preventDefault(); setRightPanel(false); return; }
 });
 
+setHome(true);
 applyI18n();
 void refreshState();
