@@ -30,6 +30,12 @@ const newSessionEl = $("#new-session");
 const pickWorkspaceEl = $("#pick-workspace");
 const composerWorkspaceEl = $("#composer-workspace");
 const projectToggleEl = $("#project-toggle");
+const wsSearchEl = $("#ws-search");
+const wsSearchBoxEl = $("#ws-search-box");
+const wsSearchInputEl = $("#ws-search-input");
+const wsSortEl = $("#ws-sort");
+let sessionFilter = "";
+let sessionSort = "recent";
 const sessionTitleEl = $("#session-title");
 const workspaceNameEl = $("#workspace-name");
 const statusDotEl = $("#status-dot");
@@ -180,6 +186,19 @@ closeRightEl.addEventListener("click", () => setRightPanel(false));
 projectToggleEl.addEventListener("click", () => {
   const collapsed = projectToggleEl.parentElement.classList.toggle("collapsed");
   projectToggleEl.setAttribute("aria-expanded", String(!collapsed));
+});
+wsSearchEl.addEventListener("click", () => {
+  wsSearchBoxEl.hidden = !wsSearchBoxEl.hidden;
+  if (!wsSearchBoxEl.hidden) wsSearchInputEl.focus();
+  else { sessionFilter = ""; wsSearchInputEl.value = ""; void refreshSessions(); }
+});
+wsSearchInputEl.addEventListener("input", () => {
+  sessionFilter = wsSearchInputEl.value.trim();
+  void refreshSessions();
+});
+wsSortEl.addEventListener("click", () => {
+  sessionSort = sessionSort === "recent" ? "name" : "recent";
+  void refreshSessions();
 });
 
 filesToggleEl.addEventListener("click", () => {
@@ -774,11 +793,27 @@ function relativeTime(ms) {
 async function refreshSessions() {
   const sessions = await api.sessions();
   sessionsEl.replaceChildren();
-  if (sessions.length === 0) {
-    const e = document.createElement("div"); e.className = "session-empty"; e.textContent = t("sessions.none");
-    sessionsEl.append(e); return;
+
+  const newRow = document.createElement("button");
+  newRow.type = "button"; newRow.className = "session-item session-new";
+  const newTi = document.createElement("span"); newTi.className = "session-title-text";
+  newTi.textContent = t("ws.new");
+  newRow.append(newTi);
+  newRow.addEventListener("click", () => newSessionEl.click());
+  sessionsEl.append(newRow);
+
+  let list = sessions;
+  if (sessionFilter !== "") {
+    const f = sessionFilter.toLowerCase();
+    list = list.filter((s) => (s.title || "").toLowerCase().includes(f));
   }
-  for (const s of sessions) {
+  if (sessionSort === "name") {
+    list = [...list].sort((a, b) => (a.title || "").localeCompare(b.title || ""));
+  } else {
+    list = [...list].sort((a, b) => b.updatedAt - a.updatedAt);
+  }
+
+  for (const s of list) {
     const b = document.createElement("button"); b.type = "button"; b.className = "session-item";
     if (s.id === currentSessionId) b.classList.add("active");
     const ti = document.createElement("span"); ti.className = "session-title-text";
@@ -898,7 +933,6 @@ async function refreshState() {
   const idle = t("status.ctx", { model: s.model, k: Math.round(s.contextWindow / 1000) });
   statusTextEl.textContent = busy ? t("status.running") : idle;
   statusTextEl.dataset.idle = idle;
-  workspaceNameEl.textContent = s.workspace.split(/[\\/]/).pop() ?? s.workspace;
   workspaceNameEl.title = s.workspace;
   sessionTitleEl.textContent = t("session.fallback", { id: shortId(s.sessionId) });
   versionEl.textContent = `v${s.version}`;
