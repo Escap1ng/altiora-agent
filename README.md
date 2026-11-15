@@ -6,7 +6,7 @@ A headless-first coding agent harness with a CLI and a Windows desktop app.
 
 Altiora runs a model against a real working directory: it streams a turn, executes tools, enforces permissions, and records everything in an append-only session log that can be resumed, forked, or replayed.
 
-Status: **0.1.0** on npm. The repository implements M0–M8; the next scope is M9–M11.
+Status: **0.1.0** on npm. The repository implements M0–M8 plus a schedules module and a redesigned desktop UI; the next scope is M9–M13.
 
 ## Design
 
@@ -40,9 +40,11 @@ Shipped:
 
 - CLI through M7: streaming chat with tool activity, permission rules, JSONL sessions with resume and fork, AGENTS.md context, compaction, subagents, web fetch, `apply_patch`, `/stats` `/compress` `/model`, and context-window discovery.
 - Desktop through M8: Electron shell with a session sidebar, workspace picker, file tree and read-only preview, streaming reasoning, and approval dialogs; both the executable and the installer carry the app icon.
+- Schedules: a zero-dependency cron parser, a JSON store and a headless runner, exposed as `altiora schedule` and as a Schedules manager in the desktop sidebar.
+- Desktop UI refresh: Simplified Chinese by default with English in Settings, a bilingual home screen whose composer sinks on the first send, a docked progress panel (plan, working files, skills), a workspace list with folder open/close animation, session titles derived from the log, and runtime permission-mode switching.
 - `altiora-agent@0.1.0` is published on npm; the command is `altiora`.
 
-Verification: `npm test` runs the unit tests plus end-to-end tests against a mock OpenAI-compatible server, and `npm run lint`, `npm run typecheck` and `npm run build` gate the tree. The desktop package has its own tests for the agent service, and the NSIS installer has been installed and uninstalled silently on Windows.
+Verification: `npm test` runs the unit tests plus end-to-end tests against a mock OpenAI-compatible server, and `npm run lint`, `npm run typecheck` and `npm run build` gate the tree. The desktop package has its own tests for the agent service, and the NSIS installer has been installed and uninstalled silently on Windows. CI runs both packages on ubuntu, macOS and Windows across Node 22 and 24, including the desktop build, typecheck and tests.
 
 Known limits:
 
@@ -50,6 +52,8 @@ Known limits:
 - MCP servers, skills, hooks and checkpointing are not implemented yet; they are M9–M11.
 - Only the OpenAI-compatible provider is implemented; native Anthropic and Gemini adapters are not.
 - The desktop app targets Windows today, and there is no browser UI.
+- The desktop UI is localized (Chinese and English); CLI output stays English by convention.
+- Scheduled tasks run unattended, so a write without a matching `--allow` rule is denied rather than queued for approval.
 
 ## Requirements
 
@@ -108,7 +112,16 @@ The desktop app runs the same scheduler in the background and exposes a Schedule
 
 ## Desktop app
 
-`desktop/` is an Electron shell over the same core. The agent loop runs in the main process and streams `RunEvent`s to the renderer over IPC; approvals round-trip through a modal, and the preload bridge exposes nothing beyond the channels the window uses. There is no HTTP listener. The window has a collapsible session sidebar, a workspace picker, a file tree with a read-only preview, and renders reasoning separately from the answer.
+`desktop/` is an Electron shell over the same core. The agent loop runs in the main process and streams `RunEvent`s to the renderer over IPC; approvals round-trip through a modal, and the preload bridge exposes nothing beyond the channels the window uses. There is no HTTP listener.
+
+The window opens on a bilingual home screen: a centered welcome line with the composer beneath it, which sinks to the bottom once the first turn starts. Each turn renders as a timeline with a live timer, collapsible reasoning, one row per tool call, and the answer as Markdown.
+
+- **Sidebar**: new task, Skills and Connections entries, a Schedules manager, and a workspace list whose group row animates between a closed and an open folder. Session titles come from the first user message in the log; search filters them and the sort control toggles between recent and name.
+- **Progress panel**: a docked column with plan, working files and skills cards. Result files are collected only after a write succeeds, and history replay rebuilds the plan, the file list and the used-tool chips.
+- **Composer**: permission-mode chip cycles `default / plan / unattended` at runtime, and the model chip shows the active model and its context window.
+- **Settings**: language (Chinese or English) and theme (light or dark), both persisted locally.
+
+The scheduler starts with the app and stops on quit, so scheduled tasks fire while the window is open.
 
 | Workflow | Command |
 |---|---|
@@ -121,13 +134,17 @@ The desktop app runs the same scheduler in the background and exposes a Schedule
 
 ### Screenshots
 
-![Altiora window with a streaming answer, an expanded reasoning block and the file panel](docs/screenshots/app.png)
+![Home screen with the bilingual welcome line and the centered composer](docs/screenshots/home.png)
 
-Streaming answer, reasoning block and the collapsible file panel.
+The home screen: a bilingual welcome line, the composer centered beneath it, and suggestion chips. The composer sinks to the bottom once the first turn starts.
 
-![Approval dialog shown before an edit tool call](docs/screenshots/approval.png)
+![A finished turn with the timeline, the answer and the docked progress panel](docs/screenshots/app.png)
 
-Tool calls that write files wait for explicit approval.
+A finished turn: the timeline with reasoning and tool rows, the Markdown answer, and the progress panel showing the plan, result files and the workspace tree.
+
+![Approval dialog shown before a write tool call](docs/screenshots/approval.png)
+
+Tool calls that write files wait for explicit approval, and the dialog lists the exact paths.
 
 ![Read-only preview of a file opened from the workspace tree](docs/screenshots/preview.png)
 
@@ -160,9 +177,10 @@ src/providers   model adapters (OpenAI-compatible first)
 src/tools       tool definitions and execution
 src/permissions permission rules and workspace containment
 src/session     append-only JSONL log, projection, resume
+src/schedule    cron parsing, schedule store, headless scheduler
 src/config      schema, path resolution, AGENTS.md discovery
 desktop/src     Electron main process, agent service, preload bridge
-desktop/renderer  window markup, styles and renderer script
+desktop/renderer  window markup, styles, renderer script and i18n strings
 desktop/scripts   core copy and icon generation
 ```
 
@@ -177,9 +195,11 @@ The detailed plan, acceptance criteria and deferred items live in [docs/PLAN.md]
 | M10b | CLI 0.3.0 | Harness spec and library, hooks, input fingerprints |
 | M11 | CLI 0.4.0 | Checkpointing and `/rewind` over the resources a tool declares |
 | M12 | CLI 0.5.0 | Native Anthropic adapter, capability matrix, `altiora models`, mid-session model switching |
-| M13 | desktop 0.3.0 | Session rename/pin/delete/search, workspace history, skills and connections panels, usage view |
+| M13 | desktop 0.3.0 | Session rename/pin/delete, workspace history, editable skills and connections panels, usage view |
 
 The order is deliberate: MCP adds the largest pool of external tools, M10 turns the harness itself into versioned data that sessions can be compared against, and M11 adds the safety net for file writes. Pointer-based compaction is deferred until summary-based compaction shows measured context loss.
+
+Already delivered ahead of the roadmap: session search and sort in the sidebar, read-only Skills and Connections panels, and the schedules module.
 
 ### Explicit non-goals
 
