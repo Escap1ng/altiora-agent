@@ -130,7 +130,7 @@ The scheduler starts with the app and stops on quit, so scheduled tasks fire whi
 | Start the desktop app | `cd desktop && npm install && npm run start` |
 | Build the installer | `cd desktop && npm run package` |
 
-`npm run package` rebuilds the core, copies its `dist` into the app, and writes an NSIS installer plus an unpacked build to `desktop/release/`. The installer is per-user, allows choosing the directory, and is unsigned, so Windows SmartScreen warns on first run. Installer art comes from `desktop/scripts/make-icons.py`, which needs Pillow and regenerates the ICO, header and sidebar bitmaps in `desktop/build/`.
+`npm run package` rebuilds the core, copies its `dist` into the app, and writes an NSIS installer plus an unpacked build to `desktop/release/`. The installer is per-user, allows choosing the directory, and is unsigned, so Windows SmartScreen warns on first run. Installer art comes from `desktop/scripts/make-icons.py`, which needs Pillow and regenerates the ICO, header and sidebar bitmaps in `desktop/build/`. The mark is a charcoal rounded square with a white twin-peak glyph; the same glyph appears in the sidebar and on the home screen.
 
 ### Screenshots
 
@@ -140,7 +140,7 @@ The home screen: a bilingual welcome line, the composer centered beneath it, and
 
 ![A finished turn with the timeline, the answer and the docked progress panel](docs/screenshots/app.png)
 
-A finished turn: the timeline with reasoning and tool rows, the Markdown answer, and the progress panel showing the plan, result files and the workspace tree.
+A finished turn: the timeline with reasoning and localized tool rows, the Markdown answer, and the progress panel showing the plan, result files and the workspace tree.
 
 ![Approval dialog shown before a write tool call](docs/screenshots/approval.png)
 

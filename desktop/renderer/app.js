@@ -442,7 +442,7 @@ function restoreEmpty() {
   empty.className = "empty";
   const hero = document.createElement("div"); hero.className = "home-hero";
   const mark = document.createElement("span"); mark.className = "home-mark"; mark.setAttribute("aria-hidden", "true");
-  mark.innerHTML = '<svg width="22" height="22" viewBox="0 0 24 24" fill="none"><path d="M12 2.5l2.2 7.3 7.3 2.2-7.3 2.2-2.2 7.3-2.2-7.3-7.3-2.2 7.3-2.2z" fill="url(#homeGradDyn)"/><defs><linearGradient id="homeGradDyn" x1="4" y1="4" x2="20" y2="20"><stop stop-color="#2f6bff"/><stop offset="1" stop-color="#7b5cff"/></linearGradient></defs></svg>';
+  mark.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="url(#homeGradDyn)"/><path d="M13.1 17.2l3.8-5.8 3.9 5.8z" fill="#fff"/><path d="M4.2 17.2l6-10.3 6 10.3z" fill="#fff"/><defs><linearGradient id="homeGradDyn" x1="12" y1="0" x2="12" y2="24" gradientUnits="userSpaceOnUse"><stop stop-color="#26292e"/><stop offset="1" stop-color="#101114"/></linearGradient></defs></svg>';
   const slogan = document.createElement("h1"); slogan.className = "home-slogan"; slogan.textContent = t("home.slogan");
   hero.append(mark, slogan);
   const sub = document.createElement("p"); sub.className = "home-sub"; sub.textContent = t("home.sub");
@@ -849,12 +849,14 @@ function renderHistory(history) {
   messagesEl.replaceChildren();
   const toolResults = new Map();
   const writeCalls = new Map();
+  const toolUses = new Map();
   let lastTodos = null;
   for (const m of history) {
     if (m.role === "tool") toolResults.set(m.toolCallId, m);
     if (m.role === "assistant") {
       for (const p of m.content) {
         if (p.type !== "tool_use") continue;
+        toolUses.set(p.id, p);
         if (p.name === "todo_write") lastTodos = p.input;
         if (WRITE_TOOLS.has(p.name)) {
           const path = typeof p.input === "object" && p.input !== null ? p.input.path : undefined;
@@ -885,7 +887,8 @@ function renderHistory(history) {
       stepAssistant = null; stepReasoning = null; continue;
     }
     if (m.role === "tool") {
-      const row = addToolRow("tool", null);
+      const use = toolUses.get(m.toolCallId);
+      const row = addToolRow(use?.name ?? "tool", use?.input ?? null);
       row.details.classList.remove("running");
       row.details.classList.add(m.isError ? "error" : "ok");
       row.output.textContent = m.output; continue;
