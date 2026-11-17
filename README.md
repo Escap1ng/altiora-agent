@@ -1,5 +1,7 @@
 # Altiora
 
+English | [简体中文](README.zh-CN.md)
+
 *ad altiora* - toward higher things.
 
 A headless-first coding agent harness with a CLI and a Windows desktop app.

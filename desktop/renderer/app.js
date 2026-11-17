@@ -667,6 +667,23 @@ function closeConfirm(approved) {
   void api.respond(req.id, approved);
   addNotice(t(approved ? "notice.allowed" : "notice.denied", { tool: req.tool }), approved ? "" : "error");
 }
+function localizeReason(raw) {
+  if (typeof raw !== "string" || raw === "") return raw;
+  const unattended = "; unattended mode turns ask into deny";
+  let text = raw;
+  let suffix = "";
+  if (text.endsWith(unattended)) { text = text.slice(0, -unattended.length); suffix = "; " + t("reason.unattended"); }
+  let head;
+  if (text === "no matching rule") head = t("reason.noRule");
+  else if (text === "read-only tool") head = t("reason.readOnly");
+  else if (text === "plan mode blocks writes") head = t("reason.planBlocks");
+  else if (text.endsWith(" mode")) head = t("reason.mode", { mode: text.slice(0, -5) });
+  else {
+    const rule = /^(allow|ask|deny) by rule (.+)$/.exec(text);
+    head = rule ? t("reason.byRule", { effect: t(`effect.${rule[1]}`), rule: rule[2] }) : text;
+  }
+  return head + suffix;
+}
 function showConfirm(req) {
   pendingConfirm = req;
   modalTitleEl.textContent = t("allowTool", { tool: req.tool });
@@ -676,7 +693,7 @@ function showConfirm(req) {
     for (const r of req.resources) { const li = document.createElement("li"); li.textContent = r; ul.append(li); }
     modalBodyEl.append(ul);
   }
-  const reason = document.createElement("div"); reason.className = "modal-reason"; reason.textContent = req.reason;
+  const reason = document.createElement("div"); reason.className = "modal-reason"; reason.textContent = localizeReason(req.reason);
   modalBodyEl.append(reason);
   modalEl.hidden = false; approveEl.focus();
 }
