@@ -1,14 +1,37 @@
-# Altiora
+<div align="center">
+  <img src="docs/brand/hero.svg" width="100%" alt="Altiora —— 向更高处">
+</div>
 
-[English](README.md) | 简体中文
+<h1 align="center">Altiora</h1>
 
-*ad altiora* —— 向更高处。
+<p align="center"><em>ad altiora</em> —— 向更高处。</p>
 
-一个无头优先的编码 agent 框架，提供命令行工具与 Windows 桌面应用。
+<p align="center">无头优先的编码 agent 框架，提供命令行工具与 Windows 桌面应用。</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/altiora-agent"><img src="https://img.shields.io/npm/v/altiora-agent?style=flat-square&labelColor=111216&color=16a36a" alt="npm 版本"></a>
+  <a href="https://github.com/Escap1ng/altiora-agent/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Escap1ng/altiora-agent/ci.yml?style=flat-square&label=CI&labelColor=111216" alt="CI 状态"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-16a36a?style=flat-square&labelColor=111216" alt="许可"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.18-16a36a?style=flat-square&labelColor=111216" alt="Node 版本"></a>
+  <a href="desktop/"><img src="https://img.shields.io/badge/platform-Windows%20%2B%20CLI-16a36a?style=flat-square&labelColor=111216" alt="平台"></a>
+</p>
+
+<p align="center">
+  <a href="README.md">English</a> | 简体中文
+</p>
+
+<p align="center">
+  <a href="#设计">设计</a> ·
+  <a href="#状态">状态</a> ·
+  <a href="#用法">用法</a> ·
+  <a href="#桌面应用">桌面应用</a> ·
+  <a href="#开发">开发</a> ·
+  <a href="#路线图">路线图</a>
+</p>
+
+---
 
 Altiora 让模型在真实工作目录中运行：流式推进一轮对话、执行工具、强制权限判定，并把全过程记录进只追加的会话日志，可随时恢复、分叉或回放。
-
-状态：npm 上为 **0.1.0**。仓库已实现 M0–M8，外加定时计划模块与改版后的桌面界面；下一阶段范围是 M9–M13。
 
 ## 设计
 
@@ -37,6 +60,8 @@ CLI (src/cli)                 桌面端 (desktop/)
 - **Windows 是一等平台。** 命令以参数数组启动，绝不使用 `shell: true`；路径归属用 `path.relative` 比较解析后的路径。
 
 ## 状态
+
+当前发布：**0.1.0** 已在 npm 上。仓库已实现 M0–M8，外加定时计划模块与改版后的桌面界面；下一阶段范围是 M9–M13。
 
 已交付：
 
@@ -174,19 +199,21 @@ cd desktop && npm run typecheck && npm test
 
 ## 目录结构
 
-```
-src/cli         命令入口与输出渲染器
-src/core        agent 循环、上下文组装、压缩、运行事件
-src/providers   模型适配器（先做 OpenAI 兼容）
-src/tools       工具定义与执行
-src/permissions 权限规则与工作区归属
-src/session     只追加 JSONL 日志、投影、恢复
-src/schedule    cron 解析、计划存储、无头调度器
-src/config      schema、路径解析、AGENTS.md 发现
-desktop/src     Electron 主进程、agent 服务、preload 桥
-desktop/renderer  窗口结构、样式、渲染脚本与语言包
-desktop/scripts   核心拷贝与图标生成
-```
+| 路径 | 内容 |
+|---|---|
+| `src/cli` | 命令入口与输出渲染器 |
+| `src/core` | agent 循环、上下文组装、压缩、运行事件 |
+| `src/providers` | 模型适配器（先做 OpenAI 兼容） |
+| `src/tools` | 工具定义与执行 |
+| `src/permissions` | 权限规则与工作区归属 |
+| `src/session` | 只追加 JSONL 日志、投影、恢复 |
+| `src/schedule` | cron 解析、计划存储、无头调度器 |
+| `src/config` | schema、路径解析、AGENTS.md 发现 |
+| `desktop/src` | Electron 主进程、agent 服务、preload 桥 |
+| `desktop/renderer` | 窗口结构、样式、渲染脚本与语言包 |
+| `desktop/scripts` | 核心拷贝与图标生成 |
+| `docs/brand` | README 首图素材 |
+| `docs/screenshots` | README 截图，按界面语言分目录 |
 
 ## 路线图
 

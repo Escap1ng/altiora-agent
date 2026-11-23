@@ -1,14 +1,37 @@
-# Altiora
+<div align="center">
+  <img src="docs/brand/hero.svg" width="100%" alt="Altiora - ad altiora, toward higher things">
+</div>
 
-English | [简体中文](README.zh-CN.md)
+<h1 align="center">Altiora</h1>
 
-*ad altiora* - toward higher things.
+<p align="center"><em>ad altiora</em> — toward higher things.</p>
 
-A headless-first coding agent harness with a CLI and a Windows desktop app.
+<p align="center">A headless-first coding agent harness with a CLI and a Windows desktop app.</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/altiora-agent"><img src="https://img.shields.io/npm/v/altiora-agent?style=flat-square&labelColor=111216&color=16a36a" alt="npm version"></a>
+  <a href="https://github.com/Escap1ng/altiora-agent/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Escap1ng/altiora-agent/ci.yml?style=flat-square&label=CI&labelColor=111216" alt="CI status"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-16a36a?style=flat-square&labelColor=111216" alt="license"></a>
+  <a href="package.json"><img src="https://img.shields.io/badge/node-%3E%3D22.18-16a36a?style=flat-square&labelColor=111216" alt="node version"></a>
+  <a href="desktop/"><img src="https://img.shields.io/badge/platform-Windows%20%2B%20CLI-16a36a?style=flat-square&labelColor=111216" alt="platform"></a>
+</p>
+
+<p align="center">
+  English | <a href="README.zh-CN.md">简体中文</a>
+</p>
+
+<p align="center">
+  <a href="#design">Design</a> ·
+  <a href="#status">Status</a> ·
+  <a href="#usage">Usage</a> ·
+  <a href="#desktop-app">Desktop app</a> ·
+  <a href="#development">Development</a> ·
+  <a href="#roadmap">Roadmap</a>
+</p>
+
+---
 
 Altiora runs a model against a real working directory: it streams a turn, executes tools, enforces permissions, and records everything in an append-only session log that can be resumed, forked, or replayed.
-
-Status: **0.1.0** on npm. The repository implements M0–M8 plus a schedules module and a redesigned desktop UI; the next scope is M9–M13.
 
 ## Design
 
@@ -37,6 +60,8 @@ Imports enforce the boundaries: `src/core` never imports `src/providers` or `src
 - **Windows is a first-class platform.** Commands are spawned with argument arrays and never `shell: true`; path containment compares resolved paths with `path.relative`.
 
 ## Status
+
+Current release: **0.1.0** on npm. The repository implements M0–M8 plus a schedules module and a redesigned desktop UI; the next scope is M9–M13.
 
 Shipped:
 
@@ -172,19 +197,21 @@ cd desktop && npm run typecheck && npm test
 
 ## Layout
 
-```
-src/cli         command entry points and output renderers
-src/core        agent loop, context assembly, compaction, run events
-src/providers   model adapters (OpenAI-compatible first)
-src/tools       tool definitions and execution
-src/permissions permission rules and workspace containment
-src/session     append-only JSONL log, projection, resume
-src/schedule    cron parsing, schedule store, headless scheduler
-src/config      schema, path resolution, AGENTS.md discovery
-desktop/src     Electron main process, agent service, preload bridge
-desktop/renderer  window markup, styles, renderer script and i18n strings
-desktop/scripts   core copy and icon generation
-```
+| Path | Contents |
+|---|---|
+| `src/cli` | command entry points and output renderers |
+| `src/core` | agent loop, context assembly, compaction, run events |
+| `src/providers` | model adapters (OpenAI-compatible first) |
+| `src/tools` | tool definitions and execution |
+| `src/permissions` | permission rules and workspace containment |
+| `src/session` | append-only JSONL log, projection, resume |
+| `src/schedule` | cron parsing, schedule store, headless scheduler |
+| `src/config` | schema, path resolution, AGENTS.md discovery |
+| `desktop/src` | Electron main process, agent service, preload bridge |
+| `desktop/renderer` | window markup, styles, renderer script and i18n strings |
+| `desktop/scripts` | core copy and icon generation |
+| `docs/brand` | README hero artwork |
+| `docs/screenshots` | README screenshots, per UI language |
 
 ## Roadmap
 
