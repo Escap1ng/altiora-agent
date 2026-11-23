@@ -1,5 +1,9 @@
 <div align="center">
-  <img src="docs/brand/hero.svg" width="100%" alt="Altiora - ad altiora, toward higher things">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/hero-light.svg">
+    <img src="docs/brand/hero-light.svg" width="100%" alt="Altiora - ad altiora, toward higher things">
+  </picture>
 </div>
 
 <h1 align="center">Altiora</h1>
@@ -37,19 +41,27 @@ Altiora runs a model against a real working directory: it streams a turn, execut
 
 ### Architecture
 
-```
-CLI (src/cli)                 Desktop (desktop/)
-        \                      /
-         runAgent loop (src/core)
-          |        |        |
-   providers     tools    permissions
-          \        |        /
-     append-only session log (JSONL)
-```
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/architecture-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/architecture-light.svg">
+    <img src="docs/brand/architecture-light.svg" width="100%" alt="Altiora architecture: CLI and desktop drive the runAgent loop, which uses providers, tools and permissions and writes an append-only JSONL session log">
+  </picture>
+</div>
 
 `runAgent` takes a provider, a tool registry, the permission engine and a log sink. It appends each turn, attempt, tool call, permission decision and result as it goes, and emits `RunEvent` objects. The CLI renderers and the desktop window consume those events; nothing in the core writes to stdout. Model context is projected from the log, so resume, fork and replay all read the same file.
 
 Imports enforce the boundaries: `src/core` never imports `src/providers` or `src/cli`, wire formats stay in the provider adapter, and the desktop shell imports the built core and runs the same loop inside the Electron main process. There is no HTTP listener between the window and the loop.
+
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/log-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/log-light.svg">
+    <img src="docs/brand/log-light.svg" width="100%" alt="The append-only JSONL session log is the only source of truth; model context is projected from it, and resume, fork and replay read the same file">
+  </picture>
+</div>
+
+The log is the only source of truth. Model context is rebuilt from it every turn, and resume, fork and replay are three views over the same file.
 
 ### Principles
 
@@ -102,6 +114,14 @@ altiora run "fix the failing test" --model deepseek-chat \
 ```
 
 Rules use `tool(pattern)` syntax and are evaluated deny first, then ask, then allow. Read-only tools are allowed by default; `--permission-mode unattended` turns every unmatched `ask` into `deny`, and `--permission-mode plan` blocks all writes. Paths are resolved and rejected when they leave the workspace.
+
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/permissions-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/permissions-light.svg">
+    <img src="docs/brand/permissions-light.svg" width="100%" alt="Permission pipeline: a tool call is checked against deny, ask and allow rules in order with first match winning; unattended mode turns ask into deny">
+  </picture>
+</div>
 
 `task` runs a subagent with a fresh context and a tool set without `task` itself, so subagents cannot nest. `webfetch` only accepts public http(s) URLs: loopback, private, link-local and metadata addresses are rejected, redirects are re-checked, and responses are capped at 5 MB.
 

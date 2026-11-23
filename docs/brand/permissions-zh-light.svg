@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="540" viewBox="0 0 1600 540" role="img" aria-label="权限判定流程：工具调用按 deny、ask、allow 的顺序判定，先匹配先生效；无人值守模式把 ask 变为 deny">
+  <defs>
+    <clipPath id="card"><rect width="1600" height="540" rx="24"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="0.55" stop-color="#F5F8F6"/><stop offset="1" stop-color="#FBFCFB"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.42" r="0.45">
+      <stop offset="0" stop-color="#16A36A" stop-opacity="0.1"/><stop offset="0.6" stop-color="#16A36A" stop-opacity="0.02"/><stop offset="1" stop-color="#16A36A" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#000000" stroke-opacity="0.02" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#B4BAC0"/>
+    </marker>
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1600" height="540" fill="url(#bg)"/>
+    <rect width="1600" height="540" fill="url(#halo)"/>
+    <rect width="1600" height="540" fill="url(#grid)"/>
+
+    <text x="880" y="108" text-anchor="middle" font-size="17" font-weight="400" fill="#6B7076">先匹配先生效</text>
+    <g stroke="#B4BAC0" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+      <path d="M480 270 L698 280"/>
+      <path d="M1060 180 L1198 180"/><path d="M1060 280 L1198 280"/><path d="M1060 380 L1198 380"/>
+    </g>
+
+    <g>
+      <rect x="180" y="212" width="300" height="116" rx="14" fill="#FFFFFF" stroke="#D9DFDC" stroke-width="1.2"/>
+      <text x="330" y="263" text-anchor="middle" font-size="24" font-weight="500" fill="#1F2328">工具调用</text>
+      <text x="330" y="291" text-anchor="middle" font-size="17" font-weight="400" fill="#6B7076">名称与参数</text>
+    </g>
+    <g>
+      <rect x="700" y="130" width="360" height="300" rx="14" fill="#FFFFFF" stroke="#D9DFDC" stroke-width="1.2"/>
+      <line x1="700" y1="230" x2="1060" y2="230" stroke="#D9DFDC" stroke-width="1"/>
+      <line x1="700" y1="330" x2="1060" y2="330" stroke="#D9DFDC" stroke-width="1"/>
+
+      <text x="880" y="188" text-anchor="middle" font-size="23" font-weight="500" fill="#1F2328">拒绝</text>
+
+      <text x="880" y="288" text-anchor="middle" font-size="23" font-weight="500" fill="#1F2328">询问</text>
+
+      <text x="880" y="388" text-anchor="middle" font-size="23" font-weight="500" fill="#1F2328">允许</text>
+    </g>
+
+    <g>
+      <rect x="1200" y="140" width="280" height="80" rx="12" fill="#FFFFFF" stroke="#D9DFDC" stroke-width="1.2"/>
+      <text x="1340" y="174" text-anchor="middle" font-size="21" font-weight="500" fill="#1F2328">拒绝执行</text>
+      <text x="1340" y="200" text-anchor="middle" font-size="15" font-weight="400" fill="#6B7076">调用被阻止</text>
+    </g>
+
+    <g>
+      <rect x="1200" y="240" width="280" height="80" rx="12" fill="#FFFFFF" stroke="#D9DFDC" stroke-width="1.2"/>
+      <text x="1340" y="274" text-anchor="middle" font-size="21" font-weight="500" fill="#1F2328">询问用户</text>
+      <text x="1340" y="300" text-anchor="middle" font-size="15" font-weight="400" fill="#6B7076">y / N</text>
+    </g>
+
+    <g>
+      <rect x="1200" y="340" width="280" height="80" rx="12" fill="#EFF7F2" stroke="#16A36A" stroke-width="1.5"/>
+      <text x="1340" y="374" text-anchor="middle" font-size="21" font-weight="500" fill="#1F2328">执行</text>
+      <text x="1340" y="400" text-anchor="middle" font-size="15" font-weight="400" fill="#0F7A4F">工具运行</text>
+    </g>
+    <text x="800" y="494" text-anchor="middle" font-size="17" font-weight="500" fill="#6B7076">无人值守模式：ask 变为 deny</text>
+  </g>
+  <rect x="0.5" y="0.5" width="1599" height="539" rx="24" fill="none" stroke="#000000" stroke-opacity="0.12"/>
+</svg>

@@ -1,0 +1,71 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-label="Altiora - ad altiora, toward higher things">
+  <defs>
+    <clipPath id="card">
+      <rect width="1600" height="520" rx="24"/>
+    </clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="0.55" stop-color="#F4F7F5"/>
+      <stop offset="1" stop-color="#FBFCFB"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.26" cy="0.56" r="0.5">
+      <stop offset="0" stop-color="#16A36A" stop-opacity="0.10"/>
+      <stop offset="0.55" stop-color="#16A36A" stop-opacity="0.03"/>
+      <stop offset="1" stop-color="#16A36A" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#000000" stroke-opacity="0.02" stroke-width="1"/>
+    </pattern>
+    <linearGradient id="fadeLeft" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.9"/>
+      <stop offset="0.7" stop-color="#FFFFFF" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+    <mask id="gridMask">
+      <rect width="1600" height="520" fill="url(#fadeLeft)"/>
+    </mask>
+    <filter id="soft" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <filter id="crisp" x="-6%" y="-6%" width="112%" height="112%">
+      <feDropShadow dx="0" dy="6" stdDeviation="14" flood-color="#000000" flood-opacity="0.16"/>
+    </filter>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#16A36A" stop-opacity="0"/>
+      <stop offset="0.18" stop-color="#16A36A" stop-opacity="0.9"/>
+      <stop offset="0.5" stop-color="#1F2328" stop-opacity="0.35"/>
+      <stop offset="0.82" stop-color="#16A36A" stop-opacity="0.9"/>
+      <stop offset="1" stop-color="#16A36A" stop-opacity="0"/>
+    </linearGradient>
+    <path id="peaks" d="M205.25 335.6 L310.6 237.85 L388 314.44 L436.16 280.86 L501.95 335.6 Z"/>
+  </defs>
+
+  <g clip-path="url(#card)">
+    <rect width="1600" height="520" fill="url(#bg)"/>
+    <rect width="1600" height="520" fill="url(#halo)"/>
+    <rect width="1600" height="520" fill="url(#grid)" mask="url(#gridMask)"/>
+
+    <g stroke="#1F2328" fill="none">
+      <use href="#peaks" transform="translate(310.6 237.85) scale(1.05) translate(-310.6 -237.85)" stroke-opacity="0.20" stroke-width="1"/>
+      <use href="#peaks" transform="translate(310.6 237.85) scale(1.12) translate(-310.6 -237.85)" stroke-opacity="0.16" stroke-width="1"/>
+      <use href="#peaks" transform="translate(310.6 237.85) scale(1.21) translate(-310.6 -237.85)" stroke-opacity="0.12" stroke-width="1"/>
+      <use href="#peaks" transform="translate(310.6 237.85) scale(1.32) translate(-310.6 -237.85)" stroke-opacity="0.09" stroke-width="1"/>
+      <use href="#peaks" transform="translate(310.6 237.85) scale(1.45) translate(-310.6 -237.85)" stroke-opacity="0.07" stroke-width="1"/>
+      <use href="#peaks" transform="translate(310.6 237.85) scale(1.60) translate(-310.6 -237.85)" stroke-opacity="0.05" stroke-width="1"/>
+      <use href="#peaks" transform="translate(310.6 237.85) scale(1.78) translate(-310.6 -237.85)" stroke-opacity="0.035" stroke-width="1"/>
+    </g>
+
+    <use href="#peaks" fill="#16A36A" opacity="0.35" filter="url(#soft)"/>
+    <use href="#peaks" fill="#1E2226" filter="url(#crisp)"/>
+
+    <g font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif">
+      <text x="680" y="270" font-size="88" font-weight="200" letter-spacing="22" fill="#1E2226">AD ALTIORA</text>
+      <text x="684" y="322" font-size="19" font-weight="400" letter-spacing="7.5" fill="#5F656B">TOWARD HIGHER THINGS</text>
+      <text x="684" y="362" font-size="15" font-weight="500" letter-spacing="4.5" fill="#8A9097">HEADLESS-FIRST CODING AGENT HARNESS</text>
+    </g>
+
+    <rect x="0" y="518" width="1600" height="2" fill="url(#rule)"/>
+  </g>
+
+  <rect x="0.5" y="0.5" width="1599" height="519" rx="24" fill="none" stroke="#000000" stroke-opacity="0.10"/>
+</svg>

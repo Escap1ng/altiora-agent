@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="600" viewBox="0 0 1600 600" role="img" aria-label="The append-only JSONL session log is the only source of truth; model context is projected from it, and resume, fork and replay read the same file">
+  <defs>
+    <clipPath id="card"><rect width="1600" height="600" rx="24"/></clipPath>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#FFFFFF"/><stop offset="0.55" stop-color="#F5F8F6"/><stop offset="1" stop-color="#FBFCFB"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.42" r="0.45">
+      <stop offset="0" stop-color="#16A36A" stop-opacity="0.1"/><stop offset="0.6" stop-color="#16A36A" stop-opacity="0.02"/><stop offset="1" stop-color="#16A36A" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#000000" stroke-opacity="0.02" stroke-width="1"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#B4BAC0"/>
+    </marker>
+  </defs>
+  <g clip-path="url(#card)">
+    <rect width="1600" height="600" fill="url(#bg)"/>
+    <rect width="1600" height="600" fill="url(#halo)"/>
+    <rect width="1600" height="600" fill="url(#grid)"/>
+
+    <g stroke="#B4BAC0" stroke-width="1.6" fill="none" marker-end="url(#arrow)">
+      <path d="M540 272 L1038 272"/>
+      <path d="M370 376 L430 448"/><path d="M800 376 L800 448"/><path d="M1230 376 L1170 448"/>
+    </g>
+    <text x="790" y="248" text-anchor="middle" font-size="18" font-weight="400" fill="#6B7076">project</text>
+
+    <g>
+      <rect x="200" y="180" width="340" height="190" rx="14" fill="#EFF7F2" stroke="#16A36A" stroke-width="1.6"/>
+      <text x="370" y="268" text-anchor="middle" font-size="24" font-weight="500" fill="#1F2328">session log</text>
+      <text x="370" y="296" text-anchor="middle" font-size="17" font-weight="400" fill="#0F7A4F">append-only JSONL</text>
+    </g>
+
+    <g>
+      <rect x="1040" y="180" width="340" height="190" rx="14" fill="#FFFFFF" stroke="#D9DFDC" stroke-width="1.2"/>
+      <text x="1210" y="268" text-anchor="middle" font-size="24" font-weight="500" fill="#1F2328">model context</text>
+      <text x="1210" y="296" text-anchor="middle" font-size="17" font-weight="400" fill="#6B7076">rebuilt from the log</text>
+    </g>
+
+    <g>
+      <rect x="300" y="448" width="260" height="86" rx="14" fill="#FFFFFF" stroke="#D9DFDC" stroke-width="1.2"/>
+      <text x="430" y="484" text-anchor="middle" font-size="24" font-weight="500" fill="#1F2328">resume</text>
+      <text x="430" y="512" text-anchor="middle" font-size="17" font-weight="400" fill="#6B7076">continue</text>
+    </g>
+
+    <g>
+      <rect x="670" y="448" width="260" height="86" rx="14" fill="#FFFFFF" stroke="#D9DFDC" stroke-width="1.2"/>
+      <text x="800" y="484" text-anchor="middle" font-size="24" font-weight="500" fill="#1F2328">fork</text>
+      <text x="800" y="512" text-anchor="middle" font-size="17" font-weight="400" fill="#6B7076">branch</text>
+    </g>
+
+    <g>
+      <rect x="1040" y="448" width="260" height="86" rx="14" fill="#FFFFFF" stroke="#D9DFDC" stroke-width="1.2"/>
+      <text x="1170" y="484" text-anchor="middle" font-size="24" font-weight="500" fill="#1F2328">replay</text>
+      <text x="1170" y="512" text-anchor="middle" font-size="17" font-weight="400" fill="#6B7076">compare</text>
+    </g>
+  </g>
+  <rect x="0.5" y="0.5" width="1599" height="599" rx="24" fill="none" stroke="#000000" stroke-opacity="0.12"/>
+</svg>

@@ -1,5 +1,9 @@
 <div align="center">
-  <img src="docs/brand/hero.svg" width="100%" alt="Altiora —— 向更高处">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/hero-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/hero-light.svg">
+    <img src="docs/brand/hero-light.svg" width="100%" alt="Altiora —— 向更高处">
+  </picture>
 </div>
 
 <h1 align="center">Altiora</h1>
@@ -37,19 +41,27 @@ Altiora 让模型在真实工作目录中运行：流式推进一轮对话、执
 
 ### 架构
 
-```
-CLI (src/cli)                 桌面端 (desktop/)
-        \                      /
-         runAgent 循环 (src/core)
-          |        |        |
-   providers     tools    permissions
-          \        |        /
-        只追加会话日志 (JSONL)
-```
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/architecture-zh-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/architecture-zh-light.svg">
+    <img src="docs/brand/architecture-zh-light.svg" width="100%" alt="Altiora 架构：CLI 与桌面端驱动 runAgent 循环，循环使用 providers、tools 与 permissions，并写入只追加的 JSONL 会话日志">
+  </picture>
+</div>
 
 `runAgent` 接收 provider、工具注册表、权限引擎与日志写入端。它边运行边追加每一轮、每次尝试、每个工具调用、每次权限判定与结果，并发出 `RunEvent` 对象。CLI 渲染器与桌面窗口消费这些事件；核心层不向 stdout 写入任何内容。模型上下文由日志投影而来，因此恢复、分叉与回放读取的是同一份文件。
 
 导入关系强制了边界：`src/core` 不导入 `src/providers` 或 `src/cli`，协议格式只留在 provider 适配器内，桌面壳导入构建后的核心并在 Electron 主进程里运行同一个循环。窗口与循环之间没有 HTTP 监听。
+
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/log-zh-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/log-zh-light.svg">
+    <img src="docs/brand/log-zh-light.svg" width="100%" alt="只追加的 JSONL 会话日志是唯一事实源；模型上下文由它投影而来，恢复、分叉与回放读取同一份文件">
+  </picture>
+</div>
+
+日志是唯一事实源。模型上下文每一轮都由它重建，恢复、分叉与回放只是同一份文件的三种视图。
 
 ### 原则
 
@@ -102,6 +114,14 @@ altiora run "fix the failing test" --model deepseek-chat \
 ```
 
 规则使用 `tool(pattern)` 语法，按 deny、ask、allow 的顺序判定。只读工具默认允许；`--permission-mode unattended` 把所有未匹配的 `ask` 变为 `deny`，`--permission-mode plan` 阻止一切写入。路径会被解析，越出工作区即拒绝。
+
+<div align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/permissions-zh-dark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="docs/brand/permissions-zh-light.svg">
+    <img src="docs/brand/permissions-zh-light.svg" width="100%" alt="权限判定流程：工具调用按 deny、ask、allow 的顺序判定，先匹配先生效；无人值守模式把 ask 变为 deny">
+  </picture>
+</div>
 
 `task` 以全新上下文运行子 agent，其工具集不含 `task` 本身，因此子 agent 不能嵌套。`webfetch` 只接受公网 http(s) URL：回环、私有、链路本地与元数据地址一律拒绝，重定向会重新校验，响应上限 5 MB。
 
