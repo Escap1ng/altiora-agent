@@ -169,6 +169,21 @@ test("an aborted context short-circuits the call", async () => {
   });
 });
 
+test("aborting mid-call returns a tool error and keeps the server alive", async () => {
+  await withManager({ mock: server("hang-tool") }, async (_manager, tools) => {
+    const stall = byName(tools, "mcp_mock_stall");
+    const controller = new AbortController();
+    const pending = stall.execute(stall.parse({}), context({ signal: controller.signal }));
+    controller.abort();
+    const result = await pending;
+    assert.equal(result.isError, true);
+    assert.match(result.output, /mcp request aborted/);
+    const echo = byName(tools, "mcp_mock_echo");
+    const after = await echo.execute(echo.parse({ text: "ok" }), context());
+    assert.deepEqual(after, { output: "echo:ok", isError: false, truncated: false });
+  });
+});
+
 test("calls after manager close return a tool error", async () => {
   await withManager({ mock: server() }, async (manager, tools) => {
     const echo = byName(tools, "mcp_mock_echo");

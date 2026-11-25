@@ -120,6 +120,18 @@ test("abort rejects the in-flight request", async () => {
   });
 });
 
+test("a per-call abort rejects only that call and keeps the server usable", async () => {
+  await withClient(undefined, { timeoutMs: 5000 }, async (client) => {
+    await client.initialize();
+    const controller = new AbortController();
+    const pending = client.callTool("hang", {}, controller.signal);
+    controller.abort();
+    await assert.rejects(pending, /mcp request aborted/);
+    const ok = await client.callTool("echo", { text: "still-alive" });
+    assert.deepEqual(ok.content, [{ type: "text", text: "echo:still-alive" }]);
+  });
+});
+
 test("close rejects pending requests and refuses new ones", async () => {
   await withClient("hang", { timeoutMs: 5000 }, async (client) => {
     const pending = client.initialize();

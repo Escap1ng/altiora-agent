@@ -37,6 +37,9 @@ function listResult(): unknown {
   if (mode === "cwd-tool") {
     return { tools: [{ name: "where", description: "report cwd", inputSchema: { type: "object" } }] };
   }
+  if (mode === "hang-tool") {
+    return { tools: [...TOOLS, { name: "stall", inputSchema: { type: "object" } }] };
+  }
   return { tools: TOOLS };
 }
 
@@ -110,7 +113,7 @@ function handle(line: string): void {
   if (method === "tools/call") {
     const params = record["params"] as Record<string, unknown> | undefined;
     const name = params?.["name"];
-    if (name === "hang") return;
+    if (name === "hang" || name === "stall") return;
     if (mode === "crash-on-call") {
       setTimeout(() => process.exit(5), 10);
       return;

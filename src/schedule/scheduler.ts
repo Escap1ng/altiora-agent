@@ -37,14 +37,20 @@ export async function runScheduleEntry(entry: ScheduleEntry, options: SchedulerO
 
   const directory = sessionDirFor(entry.cwd, resolveAppPaths(options.env));
   mkdirSync(directory, { recursive: true });
-  const session = prepareSession({
-    directory,
-    cwd: entry.cwd,
-    model: config.model,
-    version: options.version,
-    resumeId: undefined,
-    forkId: undefined,
-  });
+  let session;
+  try {
+    session = prepareSession({
+      directory,
+      cwd: entry.cwd,
+      model: config.model,
+      version: options.version,
+      resumeId: undefined,
+      forkId: undefined,
+    });
+  } catch (error) {
+    built.runtime.mcp?.close();
+    return { ok: false, error: toHarnessError(error, "config").message };
+  }
 
   const controller = new AbortController();
   try {
@@ -91,6 +97,8 @@ export async function runScheduleEntry(entry: ScheduleEntry, options: SchedulerO
     return ok ? { ok, sessionId: session.id } : { ok: false, sessionId: session.id, error: result.stopReason };
   } catch (error) {
     return { ok: false, sessionId: session.id, error: toHarnessError(error, "provider").message };
+  } finally {
+    built.runtime.mcp?.close();
   }
 }
 

@@ -106,6 +106,7 @@ ipcMain.handle("altiora:pick-workspace", async () => {  if (service?.isRunning()
 
   try {
     service?.abort();
+    service?.dispose();
     service = await AgentService.create({
       cwd,
       env: process.env,
@@ -283,4 +284,8 @@ void app.whenReady().then(async () => {
 app.on("window-all-closed", () => {
   scheduler?.stop();
   if (process.platform !== "darwin") app.quit();
+});
+
+app.on("will-quit", () => {
+  service?.dispose();
 });

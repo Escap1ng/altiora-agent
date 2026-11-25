@@ -30,7 +30,7 @@ export interface McpClientOptions {
 export interface McpClient {
   initialize(): Promise<void>;
   listTools(): Promise<McpTool[]>;
-  callTool(name: string, args: Record<string, unknown>): Promise<McpToolResult>;
+  callTool(name: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<McpToolResult>;
   close(): void;
 }
 
@@ -39,6 +39,7 @@ interface Pending {
   resolve(value: unknown): void;
   reject(error: Error): void;
   timer: NodeJS.Timeout;
+  cleanup(): void;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -80,6 +81,7 @@ export function createMcpClient(options: McpClientOptions): McpClient {
         if (entry === undefined) continue;
         pending.delete(message.id);
         clearTimeout(entry.timer);
+        entry.cleanup();
         if (message.error !== null) {
           entry.reject(new Error(`mcp ${entry.method} failed: ${message.error.message} (code ${message.error.code})`));
         } else {
@@ -104,20 +106,34 @@ export function createMcpClient(options: McpClientOptions): McpClient {
   })();
   void pump.catch(() => undefined);
 
-  const request = (method: string, params: unknown): Promise<unknown> => {
+  const request = (method: string, params: unknown, callSignal?: AbortSignal): Promise<unknown> => {
     if (failure !== null) return Promise.reject(failure);
     if (closed) return Promise.reject(new Error("mcp client is closed"));
-    if (signal?.aborted === true) return Promise.reject(new Error("mcp request aborted"));
+    if (signal?.aborted === true || callSignal?.aborted === true) {
+      return Promise.reject(new Error("mcp request aborted"));
+    }
     const id = nextId++;
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.delete(id);
+        cleanup();
         reject(new Error(`mcp ${method} timed out after ${timeoutMs}ms`));
       }, timeoutMs);
-      pending.set(id, { method, resolve, reject, timer });
+      const onCallAbort = (): void => {
+        pending.delete(id);
+        clearTimeout(timer);
+        cleanup();
+        reject(new Error("mcp request aborted"));
+      };
+      const cleanup = (): void => {
+        callSignal?.removeEventListener("abort", onCallAbort);
+      };
+      callSignal?.addEventListener("abort", onCallAbort, { once: true });
+      pending.set(id, { method, resolve, reject, timer, cleanup });
       if (!transport.send({ kind: "request", id, method, params })) {
         pending.delete(id);
         clearTimeout(timer);
+        cleanup();
         reject(new Error("mcp server stdin is not writable"));
       }
     });
@@ -176,8 +192,8 @@ export function createMcpClient(options: McpClientOptions): McpClient {
       return tools;
     },
 
-    async callTool(name, args) {
-      const result = await request("tools/call", { name, arguments: args });
+    async callTool(name, args, callSignal) {
+      const result = await request("tools/call", { name, arguments: args }, callSignal);
       const record = isRecord(result) ? result : {};
       const content = record["content"];
       if (!Array.isArray(content)) throw new Error(`mcp tools/call result for ${name} has no content array`);

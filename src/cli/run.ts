@@ -109,6 +109,7 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
     });
   } catch (error) {
     io.stderr.write(`${(error as Error).message}\n`);
+    built.runtime.mcp?.close();
     return 1;
   }
 
@@ -264,5 +265,6 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
     return failure.code === "aborted" ? 130 : 1;
   } finally {
     process.removeListener("SIGINT", onInterrupt);
+    built.runtime.mcp?.close();
   }
 }

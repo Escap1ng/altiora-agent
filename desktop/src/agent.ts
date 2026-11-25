@@ -117,6 +117,10 @@ export class AgentService {
     this.resolveAllConfirms(false);
   }
 
+  dispose(): void {
+    this.runtime.mcp?.close();
+  }
+
   resolveConfirm(id: string, approved: boolean): boolean {
     const resolve = this.pendingConfirms.get(id);
     if (resolve === undefined) return false;

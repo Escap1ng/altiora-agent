@@ -79,6 +79,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
     session = openSessionFor(typeof values.resume === "string" ? values.resume : undefined);
   } catch (error) {
     io.stderr.write(`cannot open session: ${(error as Error).message}\n`);
+    built.runtime.mcp?.close();
     return 1;
   }
 
@@ -270,5 +271,6 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
   }
 
   rl.close();
+  built.runtime.mcp?.close();
   return 0;
 }

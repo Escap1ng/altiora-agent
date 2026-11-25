@@ -113,7 +113,7 @@ function wrapTool(server: string, tool: McpTool, client: McpClient, name: string
         return { output: "mcp call aborted", isError: true, truncated: false };
       }
       try {
-        const result = await client.callTool(tool.name, asObject(input));
+        const result = await client.callTool(tool.name, asObject(input), context.signal);
         const text = result.content.map(renderContent).join("\n");
         const truncated = truncateText(text, context.maxOutputChars);
         return { output: truncated.text, isError: result.isError, truncated: truncated.truncated };
