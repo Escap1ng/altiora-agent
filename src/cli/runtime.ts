@@ -16,6 +16,7 @@ import { openSession, sessionPath, type SessionLog } from "../session/log.ts";
 import { parseRecords } from "../session/records.ts";
 import { createRegistry, type ToolRegistry } from "../tools/registry.ts";
 import { defaultTools } from "../tools/index.ts";
+import { createMcpManager, type McpManager } from "../mcp/manager.ts";
 
 export interface RuntimeIo {
   cwd: string;
@@ -36,6 +37,7 @@ export interface Runtime {
   contextWindow: number;
   contextWindowSource: "config" | "models" | "fallback";
   modelLimits: ModelLimits | undefined;
+  mcp: McpManager | undefined;
 }
 
 export type RuntimeResult = { ok: true; runtime: Runtime } | { ok: false; code: number };
@@ -133,6 +135,19 @@ export async function buildRuntime(io: RuntimeIo, values: Record<string, unknown
   }
 
   const allTools = defaultTools();
+  let mcp: McpManager | undefined;
+  if (Object.keys(config.mcpServers).length > 0) {
+    mcp = createMcpManager({
+      servers: config.mcpServers,
+      cwd: io.cwd,
+      reservedNames: allTools.map((tool) => tool.name),
+    });
+    const discovered = await mcp.discover();
+    allTools.push(...discovered.tools);
+    for (const failure of discovered.failures) {
+      io.stderr.write(`mcp server ${failure.server} unavailable: ${failure.error}\n`);
+    }
+  }
   const registry = createRegistry(allTools);
   const subagentRegistry = createRegistry(allTools.filter((tool) => tool.name !== "task"));
   const permissions = createPermissionEngine({ mode, rules, cwd: io.cwd, platform: process.platform });
@@ -164,6 +179,7 @@ export async function buildRuntime(io: RuntimeIo, values: Record<string, unknown
       contextWindow,
       contextWindowSource,
       modelLimits,
+      mcp,
     },
   };
 }

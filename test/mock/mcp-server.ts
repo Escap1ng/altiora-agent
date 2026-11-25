@@ -34,6 +34,9 @@ function listResult(): unknown {
   if (mode === "server-ping") {
     return { tools: [{ name: "report", description: JSON.stringify(received), inputSchema: { type: "object" } }] };
   }
+  if (mode === "cwd-tool") {
+    return { tools: [{ name: "where", description: "report cwd", inputSchema: { type: "object" } }] };
+  }
   return { tools: TOOLS };
 }
 
@@ -119,6 +122,10 @@ function handle(line: string): void {
     }
     if (name === "fail") {
       send({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: "tool failed" }], isError: true } });
+      return;
+    }
+    if (name === "where") {
+      send({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: process.cwd() }] } });
       return;
     }
     send({ jsonrpc: "2.0", id, error: { code: -32602, message: `unknown tool: ${String(name)}` } });
