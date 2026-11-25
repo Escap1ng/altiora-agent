@@ -642,6 +642,9 @@ function handleEvent(event) {
     target.output.textContent = event.output === "" ? t("tool.noOutput") : event.output;
     if (event.denied) target.label.append(document.createTextNode(` · ${t("tool.denied")}`));
     else if (first !== "" && event.isError) target.label.append(document.createTextNode(` · ${first.slice(0, 80)}`));
+    if (typeof event.durationMs === "number") {
+      target.label.append(document.createTextNode(` · ${(event.durationMs / 1000).toFixed(1)}s`));
+    }
     return;
   }
   if (event.type === "step-end") { collapseReasoning(stepReasoning); return; }

@@ -26,7 +26,11 @@ export async function runTool(
   options: ToolRunnerOptions,
   step: number,
 ): Promise<ToolOutcome> {
-  options.onEvent?.({ type: "tool-call", id: call.id, name: call.name, input: call.input });
+  const startedAt = Date.now();
+
+  const emitCall = (resources: string[]): void => {
+    options.onEvent?.({ type: "tool-call", id: call.id, name: call.name, input: call.input, resources, startedAt });
+  };
 
   const deny = (output: string): ToolOutcome => {
     options.onEvent?.({
@@ -36,6 +40,7 @@ export async function runTool(
       output,
       isError: true,
       denied: true,
+      durationMs: Date.now() - startedAt,
     });
     return { output, isError: true, denied: true, truncated: false };
   };
@@ -48,19 +53,27 @@ export async function runTool(
       output,
       isError: true,
       denied: false,
+      durationMs: Date.now() - startedAt,
     });
     return { output, isError: true, denied: false, truncated: false };
   };
 
-  if (call.error !== undefined) return fail(call.error);
+  if (call.error !== undefined) {
+    emitCall([]);
+    return fail(call.error);
+  }
 
   const definition = options.registry.get(call.name);
-  if (definition === undefined) return fail(`unknown tool: ${call.name}`);
+  if (definition === undefined) {
+    emitCall([]);
+    return fail(`unknown tool: ${call.name}`);
+  }
 
   let input: unknown;
   try {
     input = definition.parse(call.input);
   } catch (error) {
+    emitCall([]);
     return fail(error instanceof Error ? error.message : String(error));
   }
 
@@ -68,8 +81,10 @@ export async function runTool(
   try {
     resources = definition.resources?.(input, context) ?? [];
   } catch (error) {
+    emitCall([]);
     return fail(error instanceof Error ? error.message : String(error));
   }
+  emitCall(resources);
 
   const decision = options.permissions.decide({
     tool: call.name,
@@ -113,6 +128,7 @@ export async function runTool(
       output: result.output,
       isError: result.isError,
       denied: false,
+      durationMs: Date.now() - started,
     });
     return { output: result.output, isError: result.isError, denied: false, truncated: result.truncated };
   } catch (error) {

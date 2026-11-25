@@ -110,6 +110,8 @@ export function createStreamJsonRenderer(
           break;
         case "reasoning-delta":
           break;
+        case "usage":
+          break;
       }
     },
     result(summary) {

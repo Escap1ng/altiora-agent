@@ -15,8 +15,17 @@ export type RunEvent =
   | { type: "step-start"; step: number }
   | { type: "text-delta"; text: string }
   | { type: "reasoning-delta"; text: string }
-  | { type: "tool-call"; id: string; name: string; input: unknown }
-  | { type: "tool-result"; id: string; name: string; output: string; isError: boolean; denied: boolean }
+  | { type: "tool-call"; id: string; name: string; input: unknown; resources: string[]; startedAt: number }
+  | {
+      type: "tool-result";
+      id: string;
+      name: string;
+      output: string;
+      isError: boolean;
+      denied: boolean;
+      durationMs: number;
+    }
+  | { type: "usage"; step: number; usage: Usage }
   | { type: "compaction"; tokensBefore: number; tokensAfter: number }
   | { type: "step-end"; step: number; reason: StopReason | "tool_calls" };
 
@@ -131,6 +140,7 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
         ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
       });
       if (result.usage.inputTokens > 0) estimator.observe(estimated, result.usage.inputTokens);
+      options.onEvent?.({ type: "usage", step, usage: result.usage });
       usage.inputTokens += result.usage.inputTokens;
       usage.outputTokens += result.usage.outputTokens;
       text += result.text;
