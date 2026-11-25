@@ -73,13 +73,14 @@ Altiora 让模型在真实工作目录中运行：流式推进一轮对话、执
 
 ## 状态
 
-当前发布：**0.1.0** 已在 npm 上。仓库已实现 M0–M8，外加定时计划模块与改版后的桌面界面；下一阶段范围是 M9–M13。
+当前发布：**0.1.0** 已在 npm 上。仓库已实现 M0–M8，外加定时计划模块、改版后的桌面界面与 M9 MCP 客户端（未发布）；下一阶段范围是 M10–M13。
 
 已交付：
 
 - CLI 至 M7：带工具活动的流式聊天、权限规则、支持恢复与分叉的 JSONL 会话、AGENTS.md 上下文、压缩、子 agent、网页抓取、`apply_patch`、`/stats` `/compress` `/model`，以及上下文窗口探测。
 - 桌面端至 M8：Electron 壳，含会话侧栏、工作区选择、文件树与只读预览、流式思考过程与审批对话框；可执行文件与安装包都带应用图标。
 - 定时计划：零依赖 cron 解析器、JSON 存储与无头执行器，通过 `altiora schedule` 与桌面侧栏的定时计划管理器暴露。
+- MCP（M9，未发布）：零依赖 stdio 客户端，发现外部工具并以 `mcp_<server>_<tool>` 暴露，走同一套权限规则，服务故障相互隔离。
 - 桌面界面改版：默认简体中文、英文收在设置中，双语首页且输入舱在首次发送后下沉，常驻进度面板（计划、工作文件、技能），带文件夹开合动画的工作区列表，从日志派生的会话标题，以及运行时权限模式切换。
 - `altiora-agent@0.1.0` 已发布到 npm，命令名为 `altiora`。
 
@@ -88,7 +89,7 @@ Altiora 让模型在真实工作目录中运行：流式推进一轮对话、执
 已知限制：
 
 - 安装包未签名，首次运行会触发 SmartScreen 提示。
-- MCP 服务、技能、hooks 与检查点尚未实现，属于 M9–M11。
+- 技能、hooks 与检查点尚未实现，属于 M10–M11。MCP 客户端仅覆盖工具能力：resources、prompts、sampling 与 HTTP/SSE 传输不在范围内。
 - 仅实现 OpenAI 兼容 provider，原生 Anthropic 与 Gemini 适配器尚未提供。
 - 桌面应用目前面向 Windows，没有浏览器界面。
 - 桌面界面已本地化（中文与英文）；按约定 CLI 输出保持英文。
@@ -156,6 +157,27 @@ altiora schedule watch
 ```
 
 桌面应用在后台运行同一个调度器，并在侧栏提供定时计划管理器。
+
+### MCP 服务
+
+外部工具来自 stdio 上的 MCP 服务，由零依赖 JSON-RPC 客户端对话。在用户配置或 `.altiora/config.json` 中配置：
+
+```json
+{
+  "mcpServers": {
+    "everything": {
+      "command": "node",
+      "args": ["D:/mcp/everything-server.js"]
+    }
+  }
+}
+```
+
+每个服务的可选字段：`env`（附加环境变量）、`cwd`（工作目录，相对路径按工作区解析）、`timeoutMs`（每请求硬超时，默认 30000）、`enabled`（设为 `false` 跳过该服务）。每个服务是一个子进程，用参数数组启动，绝不经过 shell。
+
+工具以 `mcp_<server>_<tool>` 暴露，与内置工具走同一套权限规则：无匹配规则的调用在 `default` 模式下询问，在 `plan` 与 `unattended` 下直接拒绝；服务声明的 `readOnlyHint` 会把工具标记为只读。项目级服务仅在项目配置受信任时加载（`--trust-project` 或 `permissions.trustProjectConfig`），因为启动服务就是执行代码。
+
+启动失败、崩溃或超时的服务会被隔离：在 stderr 报告不可用，运行不带它的工具继续。运行结束或中止时所有服务都会被终止，不留孤儿进程。
 
 ## 桌面应用
 
@@ -241,7 +263,6 @@ cd desktop && npm run typecheck && npm test
 
 | 里程碑 | 目标版本 | 范围 |
 |---|---|---|
-| M9 | CLI 0.2.0 | MCP stdio 客户端：零依赖 JSON-RPC、按换行分帧，仅工具能力，配置受信任门禁，名称暴露为 `mcp_<server>_<tool>` |
 | M10a | CLI 0.3.0 | `altiora doctor` 与技能 |
 | M10b | CLI 0.3.0 | harness 规格与库、hooks、输入指纹 |
 | M11 | CLI 0.4.0 | 基于工具声明资源的检查点与 `/rewind` |
@@ -250,7 +271,7 @@ cd desktop && npm run typecheck && npm test
 
 顺序是刻意的：MCP 带来最大的外部工具池，M10 把 harness 自身变成可比对的版本化数据，M11 为文件写入补上安全网。指针式压缩推迟到基于摘要的压缩出现实测上下文丢失之后再做。
 
-已提前于路线图交付：侧栏会话搜索与排序、只读的技能与连接面板，以及定时计划模块。
+已提前于路线图交付：M9 MCP stdio 客户端（未发布）、侧栏会话搜索与排序、只读的技能与连接面板，以及定时计划模块。
 
 ### 明确的非目标
 

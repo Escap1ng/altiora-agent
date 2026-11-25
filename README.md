@@ -73,13 +73,14 @@ The log is the only source of truth. Model context is rebuilt from it every turn
 
 ## Status
 
-Current release: **0.1.0** on npm. The repository implements M0–M8 plus a schedules module and a redesigned desktop UI; the next scope is M9–M13.
+Current release: **0.1.0** on npm. The repository implements M0–M8 plus a schedules module, a redesigned desktop UI and the M9 MCP client (unreleased); the next scope is M10–M13.
 
 Shipped:
 
 - CLI through M7: streaming chat with tool activity, permission rules, JSONL sessions with resume and fork, AGENTS.md context, compaction, subagents, web fetch, `apply_patch`, `/stats` `/compress` `/model`, and context-window discovery.
 - Desktop through M8: Electron shell with a session sidebar, workspace picker, file tree and read-only preview, streaming reasoning, and approval dialogs; both the executable and the installer carry the app icon.
 - Schedules: a zero-dependency cron parser, a JSON store and a headless runner, exposed as `altiora schedule` and as a Schedules manager in the desktop sidebar.
+- MCP (M9, unreleased): a zero-dependency stdio client that discovers external tools, exposes them as `mcp_<server>_<tool>` under the same permission rules, and isolates server failures.
 - Desktop UI refresh: Simplified Chinese by default with English in Settings, a bilingual home screen whose composer sinks on the first send, a docked progress panel (plan, working files, skills), a workspace list with folder open/close animation, session titles derived from the log, and runtime permission-mode switching.
 - `altiora-agent@0.1.0` is published on npm; the command is `altiora`.
 
@@ -88,7 +89,7 @@ Verification: `npm test` runs the unit tests plus end-to-end tests against a moc
 Known limits:
 
 - The installer is unsigned, so SmartScreen warns on first run.
-- MCP servers, skills, hooks and checkpointing are not implemented yet; they are M9–M11.
+- Skills, hooks and checkpointing are not implemented yet; they are M10–M11. The MCP client is tools-only: resources, prompts, sampling and HTTP/SSE transports are out of scope.
 - Only the OpenAI-compatible provider is implemented; native Anthropic and Gemini adapters are not.
 - The desktop app targets Windows today, and there is no browser UI.
 - The desktop UI is localized (Chinese and English); CLI output stays English by convention.
@@ -156,6 +157,27 @@ altiora schedule watch
 ```
 
 The desktop app runs the same scheduler in the background and exposes a Schedules manager in the sidebar.
+
+### MCP servers
+
+External tools come from MCP servers over stdio, spoken by a zero-dependency JSON-RPC client. Configure them in the user config or in `.altiora/config.json`:
+
+```json
+{
+  "mcpServers": {
+    "everything": {
+      "command": "node",
+      "args": ["D:/mcp/everything-server.js"]
+    }
+  }
+}
+```
+
+Optional per-server fields: `env` (extra environment variables), `cwd` (working directory, resolved against the workspace when relative), `timeoutMs` (per-request hard timeout, default 30000) and `enabled` (set `false` to skip a server). Each server runs as one child process spawned with an argument array, never through a shell.
+
+Tools are exposed as `mcp_<server>_<tool>` and follow the same permission rules as built-ins: an unmatched call asks in `default` mode and is denied in `plan` and `unattended`, and a server's `readOnlyHint` marks a tool read-only. Project-level servers load only when the project config is trusted (`--trust-project` or `permissions.trustProjectConfig`), because starting a server executes code.
+
+A server that fails to start, crashes or times out is isolated: it is reported unavailable on stderr and the run continues without its tools. All servers are terminated when the run ends or is aborted, leaving no orphan processes.
 
 ## Desktop app
 
@@ -239,7 +261,6 @@ The detailed plan, acceptance criteria and deferred items live in [docs/PLAN.md]
 
 | Milestone | Target | Scope |
 |---|---|---|
-| M9 | CLI 0.2.0 | MCP stdio client: zero-dependency JSON-RPC over newline-delimited frames, tools only, trust-gated config, names exposed as `mcp_<server>_<tool>` |
 | M10a | CLI 0.3.0 | `altiora doctor` and skills |
 | M10b | CLI 0.3.0 | Harness spec and library, hooks, input fingerprints |
 | M11 | CLI 0.4.0 | Checkpointing and `/rewind` over the resources a tool declares |
@@ -248,7 +269,7 @@ The detailed plan, acceptance criteria and deferred items live in [docs/PLAN.md]
 
 The order is deliberate: MCP adds the largest pool of external tools, M10 turns the harness itself into versioned data that sessions can be compared against, and M11 adds the safety net for file writes. Pointer-based compaction is deferred until summary-based compaction shows measured context loss.
 
-Already delivered ahead of the roadmap: session search and sort in the sidebar, read-only Skills and Connections panels, and the schedules module.
+Already delivered ahead of the roadmap: the M9 MCP stdio client (unreleased), session search and sort in the sidebar, read-only Skills and Connections panels, and the schedules module.
 
 ### Explicit non-goals
 
