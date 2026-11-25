@@ -73,16 +73,16 @@ The log is the only source of truth. Model context is rebuilt from it every turn
 
 ## Status
 
-Current release: **0.1.0** on npm. The repository implements M0–M8 plus a schedules module, a redesigned desktop UI and the M9 MCP client (unreleased); the next scope is M10–M13.
+Current release: **0.2.0** on npm. The repository implements M0–M9 plus a schedules module and a redesigned desktop UI; the next scope is M10–M13.
 
 Shipped:
 
 - CLI through M7: streaming chat with tool activity, permission rules, JSONL sessions with resume and fork, AGENTS.md context, compaction, subagents, web fetch, `apply_patch`, `/stats` `/compress` `/model`, and context-window discovery.
 - Desktop through M8: Electron shell with a session sidebar, workspace picker, file tree and read-only preview, streaming reasoning, and approval dialogs; both the executable and the installer carry the app icon.
 - Schedules: a zero-dependency cron parser, a JSON store and a headless runner, exposed as `altiora schedule` and as a Schedules manager in the desktop sidebar.
-- MCP (M9, unreleased): a zero-dependency stdio client that discovers external tools, exposes them as `mcp_<server>_<tool>` under the same permission rules, and isolates server failures.
+- MCP (M9): a zero-dependency stdio client that discovers external tools, exposes them as `mcp_<server>_<tool>` under the same permission rules, and isolates server failures.
 - Desktop UI refresh: Simplified Chinese by default with English in Settings, a bilingual home screen whose composer sinks on the first send, a docked progress panel (plan, working files, skills), a workspace list with folder open/close animation, session titles derived from the log, and runtime permission-mode switching.
-- `altiora-agent@0.1.0` is published on npm; the command is `altiora`.
+- `altiora-agent@0.2.0` is published on npm; the command is `altiora`.
 
 Verification: `npm test` runs the unit tests plus end-to-end tests against a mock OpenAI-compatible server, and `npm run lint`, `npm run typecheck` and `npm run build` gate the tree. The desktop package has its own tests for the agent service, and the NSIS installer has been installed and uninstalled silently on Windows. CI runs both packages on ubuntu, macOS and Windows across Node 22 and 24, including the desktop build, typecheck and tests.
 
@@ -269,7 +269,7 @@ The detailed plan, acceptance criteria and deferred items live in [docs/PLAN.md]
 
 The order is deliberate: MCP adds the largest pool of external tools, M10 turns the harness itself into versioned data that sessions can be compared against, and M11 adds the safety net for file writes. Pointer-based compaction is deferred until summary-based compaction shows measured context loss.
 
-Already delivered ahead of the roadmap: the M9 MCP stdio client (unreleased), session search and sort in the sidebar, read-only Skills and Connections panels, and the schedules module.
+Already delivered ahead of the roadmap: the M9 MCP stdio client, session search and sort in the sidebar, read-only Skills and Connections panels, and the schedules module.
 
 ### Explicit non-goals
 
