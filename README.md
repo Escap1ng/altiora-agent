@@ -73,7 +73,7 @@ The log is the only source of truth. Model context is rebuilt from it every turn
 
 ## Status
 
-Current release: **0.2.0** on npm. The repository implements M0–M9 plus a schedules module and a redesigned desktop UI; the next scope is M10–M13.
+Current release: **0.3.0** on npm. The repository implements M0–M10 plus a schedules module and a redesigned desktop UI; the next scope is M11–M13.
 
 Shipped:
 
@@ -81,16 +81,17 @@ Shipped:
 - Desktop through M8: Electron shell with a session sidebar, workspace picker, file tree and read-only preview, streaming reasoning, and approval dialogs; both the executable and the installer carry the app icon.
 - Schedules: a zero-dependency cron parser, a JSON store and a headless runner, exposed as `altiora schedule` and as a Schedules manager in the desktop sidebar.
 - MCP (M9): a zero-dependency stdio client that discovers external tools, exposes them as `mcp_<server>_<tool>` under the same permission rules, and isolates server failures.
+- Doctor and skills (M10a): `altiora doctor` checks node, config, api key, provider reachability and storage with text or JSON output; Markdown skills load from the user config and `.altiora/skills`, list their name and description in the system prompt, and load bodies on demand through a read-only `skill` tool.
+- Harness spec, hooks and fingerprints (M10b): sessions record the tool set and a canonical config fingerprint, turns carry an input fingerprint, and hooks declared in trusted config run around allowed tool calls with a timeout and write their outcomes to the session log.
 - Desktop UI refresh: Simplified Chinese by default with English in Settings, a bilingual home screen whose composer sinks on the first send, a docked progress panel (plan, working files, skills), a workspace list with folder open/close animation, session titles derived from the log, and runtime permission-mode switching.
-- `altiora-agent@0.2.0` is published on npm; the command is `altiora`.
+- `altiora-agent@0.3.0` is published on npm; the command is `altiora`.
 
 Verification: `npm test` runs the unit tests plus end-to-end tests against a mock OpenAI-compatible server, and `npm run lint`, `npm run typecheck` and `npm run build` gate the tree. The desktop package has its own tests for the agent service, and the NSIS installer has been installed and uninstalled silently on Windows. CI runs both packages on ubuntu, macOS and Windows across Node 22 and 24, including the desktop build, typecheck and tests.
 
 Known limits:
 
 - The installer is unsigned, so SmartScreen warns on first run.
-- Skills, hooks and checkpointing are not implemented yet; they are M10–M11. The MCP client is tools-only: resources, prompts, sampling and HTTP/SSE transports are out of scope.
-- Only the OpenAI-compatible provider is implemented; native Anthropic and Gemini adapters are not.
+- Checkpointing and `/rewind` are not implemented yet; they are M11. The MCP client is tools-only: resources, prompts, sampling and HTTP/SSE transports are out of scope.- Only the OpenAI-compatible provider is implemented; native Anthropic and Gemini adapters are not.
 - The desktop app targets Windows today, and there is no browser UI.
 - The desktop UI is localized (Chinese and English); CLI output stays English by convention.
 - Scheduled tasks run unattended, so a write without a matching `--allow` rule is denied rather than queued for approval.
@@ -127,6 +128,8 @@ Rules use `tool(pattern)` syntax and are evaluated deny first, then ask, then al
 `task` runs a subagent with a fresh context and a tool set without `task` itself, so subagents cannot nest. `webfetch` only accepts public http(s) URLs: loopback, private, link-local and metadata addresses are rejected, redirects are re-checked, and responses are capped at 5 MB.
 
 `altiora init` writes `.altiora/config.json` and an `AGENTS.md` stub for a new project.
+
+`altiora doctor` is the first stop when a run fails to start. It checks the node version, config validity and project-config trust, api key presence, provider `/models` reachability, workspace writability and the session directory, and exits non-zero when a check errors. Add `--output-format json` for scripts.
 
 For an interactive session, run `altiora chat --model deepseek-chat`. It keeps one session across turns, streams the answer, prints tool activity, and asks y/N whenever a rule resolves to `ask`; `/new` starts a fresh session, `/stats` prints token and tool counts, `/compress` summarizes the session on demand, `/model` switches models and re-discovers limits, and `/exit` quits. Ctrl+C during a turn aborts it without ending the session.
 
@@ -178,6 +181,39 @@ Optional per-server fields: `env` (extra environment variables), `cwd` (working 
 Tools are exposed as `mcp_<server>_<tool>` and follow the same permission rules as built-ins: an unmatched call asks in `default` mode and is denied in `plan` and `unattended`, and a server's `readOnlyHint` marks a tool read-only. Project-level servers load only when the project config is trusted (`--trust-project` or `permissions.trustProjectConfig`), because starting a server executes code.
 
 A server that fails to start, crashes or times out is isolated: it is reported unavailable on stderr and the run continues without its tools. All servers are terminated when the run ends or is aborted, leaving no orphan processes.
+
+### Skills
+
+Skills are Markdown files in the user config `skills` directory and in `.altiora/skills/` under the workspace. A project skill with the same name replaces the user one. The optional frontmatter names the skill and describes it; without it the filename is the name and the first non-heading line is the description:
+
+```markdown
+---
+name: review
+description: Review a diff and list concrete risks
+---
+Read the diff, then report findings in severity order.
+```
+
+Only the name and description enter the system prompt. The full body loads on demand through the read-only `skill` tool, so long instructions do not consume context until they are needed. `@path` lines import another file under the same containment and depth rules as `AGENTS.md`, and each skill body is capped at 20k characters.
+
+### Hooks
+
+Hooks run before or after an allowed tool call. Declare them in the user config or in a trusted `.altiora/config.json`; projects are not trusted by default because hooks execute commands:
+
+```json
+{
+  "hooks": [
+    {
+      "event": "pre_tool_use",
+      "matcher": "write",
+      "command": ["node", "scripts/check-write.mjs"],
+      "timeoutMs": 5000
+    }
+  ]
+}
+```
+
+`event` is `pre_tool_use` or `post_tool_use`; `matcher` limits a hook to one tool (`*` or omitted means all). The command runs as an argument array, never through a shell, with the workspace as its cwd and `ALTIORA_HOOK_EVENT`, `ALTIORA_TOOL`, `ALTIORA_CALL_ID` and `ALTIORA_WORKSPACE` in the environment. Every outcome (ok, non-zero exit, timeout, abort) is recorded as a `hook` record in the session log. Hooks cannot change a permission decision, are skipped for denied calls, and a failing hook never blocks the tool.
 
 ## Desktop app
 
@@ -261,15 +297,13 @@ The detailed plan, acceptance criteria and deferred items live in [docs/PLAN.md]
 
 | Milestone | Target | Scope |
 |---|---|---|
-| M10a | CLI 0.3.0 | `altiora doctor` and skills |
-| M10b | CLI 0.3.0 | Harness spec and library, hooks, input fingerprints |
 | M11 | CLI 0.4.0 | Checkpointing and `/rewind` over the resources a tool declares |
 | M12 | CLI 0.5.0 | Native Anthropic adapter, capability matrix, `altiora models`, mid-session model switching |
 | M13 | desktop 0.3.0 | Session rename/pin/delete, workspace history, editable skills and connections panels, usage view |
 
-The order is deliberate: MCP adds the largest pool of external tools, M10 turns the harness itself into versioned data that sessions can be compared against, and M11 adds the safety net for file writes. Pointer-based compaction is deferred until summary-based compaction shows measured context loss.
+The order is deliberate: MCP added the largest pool of external tools, M10 turned the harness itself into versioned data that sessions can be compared against, and M11 adds the safety net for file writes. Pointer-based compaction is deferred until summary-based compaction shows measured context loss.
 
-Already delivered ahead of the roadmap: the M9 MCP stdio client, session search and sort in the sidebar, read-only Skills and Connections panels, and the schedules module.
+Delivered ahead of the roadmap: the M9 MCP stdio client, the M10a/M10b doctor, skills, hooks, harness spec and fingerprints, session search and sort in the sidebar, and the schedules module.
 
 ### Explicit non-goals
 

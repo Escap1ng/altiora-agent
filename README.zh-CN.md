@@ -73,7 +73,7 @@ Altiora 让模型在真实工作目录中运行：流式推进一轮对话、执
 
 ## 状态
 
-当前发布：**0.2.0** 已在 npm 上。仓库已实现 M0–M9，外加定时计划模块与改版后的桌面界面；下一阶段范围是 M10–M13。
+当前发布：**0.3.0** 已在 npm 上。仓库已实现 M0–M10，外加定时计划模块与改版后的桌面界面；下一阶段范围是 M11–M13。
 
 已交付：
 
@@ -81,15 +81,17 @@ Altiora 让模型在真实工作目录中运行：流式推进一轮对话、执
 - 桌面端至 M8：Electron 壳，含会话侧栏、工作区选择、文件树与只读预览、流式思考过程与审批对话框；可执行文件与安装包都带应用图标。
 - 定时计划：零依赖 cron 解析器、JSON 存储与无头执行器，通过 `altiora schedule` 与桌面侧栏的定时计划管理器暴露。
 - MCP（M9）：零依赖 stdio 客户端，发现外部工具并以 `mcp_<server>_<tool>` 暴露，走同一套权限规则，服务故障相互隔离。
+- 诊断与技能（M10a）：`altiora doctor` 检查 node、配置、API key、provider 可达性与存储，支持文本或 JSON 输出；Markdown 技能从用户配置目录与 `.altiora/skills` 加载，把名称与描述列入系统提示，正文通过只读的 `skill` 工具按需读取。
+- harness 规格、hooks 与指纹（M10b）：会话记录工具集与配置指纹，每轮记录输入指纹；受信配置中声明的 hooks 在允许的工具调用前后执行，带超时，结果写入会话日志。
 - 桌面界面改版：默认简体中文、英文收在设置中，双语首页且输入舱在首次发送后下沉，常驻进度面板（计划、工作文件、技能），带文件夹开合动画的工作区列表，从日志派生的会话标题，以及运行时权限模式切换。
-- `altiora-agent@0.2.0` 已发布到 npm，命令名为 `altiora`。
+- `altiora-agent@0.3.0` 已发布到 npm，命令名为 `altiora`。
 
 验证：`npm test` 运行单元测试与针对模拟 OpenAI 兼容服务的端到端测试，`npm run lint`、`npm run typecheck` 与 `npm run build` 作为门禁。桌面包有独立的 agent 服务测试，NSIS 安装包已在 Windows 上完成静默安装与卸载验证。CI 在 ubuntu、macOS 与 Windows 上跨 Node 22 与 24 运行两个包，包含桌面构建、类型检查与测试。
 
 已知限制：
 
 - 安装包未签名，首次运行会触发 SmartScreen 提示。
-- 技能、hooks 与检查点尚未实现，属于 M10–M11。MCP 客户端仅覆盖工具能力：resources、prompts、sampling 与 HTTP/SSE 传输不在范围内。
+- 检查点与 `/rewind` 尚未实现，属于 M11。MCP 客户端仅覆盖工具能力：resources、prompts、sampling 与 HTTP/SSE 传输不在范围内。
 - 仅实现 OpenAI 兼容 provider，原生 Anthropic 与 Gemini 适配器尚未提供。
 - 桌面应用目前面向 Windows，没有浏览器界面。
 - 桌面界面已本地化（中文与英文）；按约定 CLI 输出保持英文。
@@ -127,6 +129,8 @@ altiora run "fix the failing test" --model deepseek-chat \
 `task` 以全新上下文运行子 agent，其工具集不含 `task` 本身，因此子 agent 不能嵌套。`webfetch` 只接受公网 http(s) URL：回环、私有、链路本地与元数据地址一律拒绝，重定向会重新校验，响应上限 5 MB。
 
 `altiora init` 为新项目写入 `.altiora/config.json` 与 `AGENTS.md` 骨架。
+
+`altiora doctor` 是启动失败时的第一站：检查 node 版本、配置有效性与项目配置信任状态、API key 是否存在、provider `/models` 可达性、工作区可写性与会话目录，任一检查出错即以非零码退出。脚本使用可加 `--output-format json`。
 
 交互式会话运行 `altiora chat --model deepseek-chat`。它跨轮保持同一会话、流式输出回答、打印工具活动，并在规则判定为 `ask` 时询问 y/N；`/new` 开启新会话，`/stats` 打印 token 与工具计数，`/compress` 按需压缩会话，`/model` 切换模型并重新探测限制，`/exit` 退出。一轮进行中按 Ctrl+C 只中止该轮，不结束会话。
 
@@ -178,6 +182,39 @@ altiora schedule watch
 工具以 `mcp_<server>_<tool>` 暴露，与内置工具走同一套权限规则：无匹配规则的调用在 `default` 模式下询问，在 `plan` 与 `unattended` 下直接拒绝；服务声明的 `readOnlyHint` 会把工具标记为只读。项目级服务仅在项目配置受信任时加载（`--trust-project` 或 `permissions.trustProjectConfig`），因为启动服务就是执行代码。
 
 启动失败、崩溃或超时的服务会被隔离：在 stderr 报告不可用，运行不带它的工具继续。运行结束或中止时所有服务都会被终止，不留孤儿进程。
+
+### 技能
+
+技能是 Markdown 文件，放在用户配置的 `skills` 目录与工作区的 `.altiora/skills/` 下。同名时项目技能覆盖用户技能。可选 frontmatter 给出名称与描述；没有时以文件名为名称、首个非标题行为描述：
+
+```markdown
+---
+name: review
+description: Review a diff and list concrete risks
+---
+Read the diff, then report findings in severity order.
+```
+
+只有名称与描述进入系统提示，完整正文通过只读的 `skill` 工具按需加载，长指令在被需要之前不占上下文。`@path` 行导入其他文件，包含关系与深度规则同 `AGENTS.md`，每个技能正文上限 20k 字符。
+
+### Hooks
+
+Hooks 在允许的工具调用前后运行。在用户配置或受信任的 `.altiora/config.json` 中声明；项目配置默认不受信任，因为 hooks 会执行命令：
+
+```json
+{
+  "hooks": [
+    {
+      "event": "pre_tool_use",
+      "matcher": "write",
+      "command": ["node", "scripts/check-write.mjs"],
+      "timeoutMs": 5000
+    }
+  ]
+}
+```
+
+`event` 为 `pre_tool_use` 或 `post_tool_use`；`matcher` 把 hook 限定到某个工具（`*` 或省略表示全部）。命令以参数数组启动、绝不经过 shell，工作目录为工作区，环境变量含 `ALTIORA_HOOK_EVENT`、`ALTIORA_TOOL`、`ALTIORA_CALL_ID` 与 `ALTIORA_WORKSPACE`。每种结果（成功、非零退出、超时、中止）都会以 `hook` 记录写入会话日志。Hooks 不能改变权限判定，被拒绝的调用不触发 hook，hook 失败也不会阻塞工具。
 
 ## 桌面应用
 
@@ -263,15 +300,13 @@ cd desktop && npm run typecheck && npm test
 
 | 里程碑 | 目标版本 | 范围 |
 |---|---|---|
-| M10a | CLI 0.3.0 | `altiora doctor` 与技能 |
-| M10b | CLI 0.3.0 | harness 规格与库、hooks、输入指纹 |
 | M11 | CLI 0.4.0 | 基于工具声明资源的检查点与 `/rewind` |
 | M12 | CLI 0.5.0 | 原生 Anthropic 适配器、能力矩阵、`altiora models`、会话中切换模型 |
 | M13 | desktop 0.3.0 | 会话重命名/置顶/删除、工作区历史、可编辑的技能与连接面板、用量视图 |
 
 顺序是刻意的：MCP 带来最大的外部工具池，M10 把 harness 自身变成可比对的版本化数据，M11 为文件写入补上安全网。指针式压缩推迟到基于摘要的压缩出现实测上下文丢失之后再做。
 
-已提前于路线图交付：M9 MCP stdio 客户端、侧栏会话搜索与排序、只读的技能与连接面板，以及定时计划模块。
+提前于路线图交付：M9 MCP stdio 客户端、M10a/M10b 的诊断、技能、hooks、规格与指纹、侧栏会话搜索与排序，以及定时计划模块。
 
 ### 明确的非目标
 

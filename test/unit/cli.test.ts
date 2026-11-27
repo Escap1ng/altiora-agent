@@ -40,7 +40,7 @@ test("--help exits 0 and prints usage", () => {
 test("--version exits 0 and prints name and version", () => {
   const result = run(["--version"]);
   assert.equal(result.status, 0);
-  assert.equal(result.stdout.trim(), "altiora 0.2.0");
+  assert.equal(result.stdout.trim(), "altiora 0.3.0");
 });
 
 test("no arguments prints help and exits 0", () => {
