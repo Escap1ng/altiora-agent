@@ -228,7 +228,9 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
                 ? "error_max_steps"
                 : result.stopReason === "loop_detected"
                   ? "error_loop"
-                  : "error_provider",
+                  : result.stopReason === "aborted"
+                    ? "aborted"
+                    : "error_provider",
           is_error: summary.isError,
           duration_ms: summary.durationMs,
           num_steps: steps,
@@ -246,6 +248,10 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       }
     }
 
+    if (result.stopReason === "aborted") {
+      if (format === "text") io.stderr.write("stopped: aborted\n");
+      return 130;
+    }
     if (result.stopReason === "max_steps" || result.stopReason === "loop_detected") {
       if (format === "text") io.stderr.write(`stopped: ${result.stopReason}\n`);
       return 4;

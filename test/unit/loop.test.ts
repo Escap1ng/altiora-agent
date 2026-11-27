@@ -6,6 +6,7 @@ import { after, test } from "node:test";
 import { runAgent } from "../../src/core/loop.ts";
 import type { Provider, ProviderEvent } from "../../src/core/types.ts";
 import { createPermissionEngine } from "../../src/permissions/engine.ts";
+import { openSession } from "../../src/session/log.ts";
 import { defaultTools } from "../../src/tools/index.ts";
 import { createRegistry } from "../../src/tools/registry.ts";
 
@@ -116,4 +117,83 @@ test("stops on a repeated tool call", async () => {
     { ...options(cwd), provider, permissions: createPermissionEngine({ mode: "unattended", rules: [], cwd, platform: process.platform }) },
   );
   assert.equal(result.stopReason, "loop_detected");
+});
+
+test("returns aborted without calling the provider when the signal is already aborted", async () => {
+  const cwd = workspace();
+  const controller = new AbortController();
+  controller.abort();
+  let called = false;
+  const provider: Provider = {
+    id: "never",
+    async *stream(): AsyncGenerator<ProviderEvent> {
+      called = true;
+      yield { type: "finish", reason: "stop" };
+    },
+  };
+
+  const result = await runAgent("anything", { ...options(cwd), provider, signal: controller.signal });
+
+  assert.equal(result.stopReason, "aborted");
+  assert.equal(called, false);
+});
+
+test("skips the rest of a tool batch when aborted during approval", async () => {
+  const cwd = workspace();
+  const controller = new AbortController();
+  const provider: Provider = {
+    id: "batch",
+    async *stream(): AsyncGenerator<ProviderEvent> {
+      yield {
+        type: "tool-call-delta",
+        index: 0,
+        id: "call_a",
+        name: "write",
+        argsDelta: JSON.stringify({ path: "a.txt", content: "a" }),
+      };
+      yield {
+        type: "tool-call-delta",
+        index: 1,
+        id: "call_b",
+        name: "write",
+        argsDelta: JSON.stringify({ path: "b.txt", content: "b" }),
+      };
+      yield { type: "finish", reason: "tool_calls" };
+    },
+  };
+
+  const result = await runAgent("two writes", {
+    ...options(cwd),
+    provider,
+    signal: controller.signal,
+    confirm: async () => {
+      controller.abort();
+      return true;
+    },
+  });
+
+  assert.equal(result.stopReason, "aborted");
+  assert.equal(existsSync(join(cwd, "a.txt")), false);
+  assert.equal(existsSync(join(cwd, "b.txt")), false);
+  const toolMessages = result.messages.filter((message) => message.role === "tool");
+  assert.equal(toolMessages.length, 2);
+  for (const message of toolMessages) {
+    assert.ok(message.role === "tool");
+    assert.equal(message.isError, true);
+    assert.match(message.output, /not executed: run aborted/);
+  }
+});
+
+test("records an aborted turn in the session log", async () => {
+  const cwd = workspace();
+  const log = openSession(cwd, "s_abort");
+  const controller = new AbortController();
+  controller.abort();
+
+  const result = await runAgent("anything", { ...options(cwd), signal: controller.signal, log });
+
+  assert.equal(result.stopReason, "aborted");
+  const turnEnd = log.records().find((record) => record.t === "turn/end");
+  assert.ok(turnEnd !== undefined);
+  assert.equal(turnEnd.t === "turn/end" ? turnEnd.stopReason : "", "aborted");
 });

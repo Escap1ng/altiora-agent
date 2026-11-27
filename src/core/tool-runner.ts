@@ -109,6 +109,8 @@ export async function runTool(
     if (!approved) return deny(`denied: ${decision.reason} (not approved)`);
   }
 
+  if (context.signal.aborted) return fail("not executed: run aborted");
+
   const started = Date.now();
   try {
     const result = await definition.execute(input, context);

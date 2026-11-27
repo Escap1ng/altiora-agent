@@ -9,7 +9,7 @@ import { runTool } from "./tool-runner.ts";
 import type { ToolContext, ToolRegistry } from "../tools/registry.ts";
 import type { Message, Provider, ProviderRequest, Usage } from "./types.ts";
 
-export type StopReason = "completed" | "max_steps" | "loop_detected" | "failed";
+export type StopReason = "completed" | "max_steps" | "loop_detected" | "aborted" | "failed";
 
 export type RunEvent =
   | { type: "step-start"; step: number }
@@ -82,9 +82,10 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
   const declarations = options.registry.declarations();
   const repeated = new Map<string, number>();
   const estimator = options.estimator ?? new TokenEstimator();
-  let compacted = false;
+  let compactedAt: number | undefined;
   let text = "";
   let settled = false;
+  let currentStep = 0;
 
   options.log?.append({ t: "turn/start", turn, input });
 
@@ -97,6 +98,8 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
 
   try {
     for (let step = 0; step < options.maxSteps; step++) {
+      currentStep = step;
+      if (options.signal.aborted) return finish("aborted", step);
       options.onEvent?.({ type: "step-start", step });
       options.log?.append({ t: "step/start", step });
 
@@ -108,7 +111,7 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
       const gate = await runCompactionGate({
         messages,
         requestMessages: initialRequestMessages,
-        compacted,
+        compactedAt,
         compaction: options.compaction,
         contextWindow: options.contextWindow ?? 128000,
         reserveOutputTokens: options.reserveOutputTokens ?? 0,
@@ -123,7 +126,7 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
       });
       messages = gate.messages;
       const requestMessages: Message[] = gate.requestMessages;
-      compacted = gate.compacted;
+      compactedAt = gate.compactedAt;
 
       const estimated = estimator.estimateMessages(requestMessages);
 
@@ -165,7 +168,16 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
       repeated.set(signature, count);
       if (count >= 3) return finish("loop_detected", step);
 
-      for (const call of result.toolCalls.slice(0, options.maxToolCallsPerStep)) {
+      const calls = result.toolCalls;
+      for (let index = 0; index < calls.length && index < options.maxToolCallsPerStep; index++) {
+        const call = calls[index]!;
+        if (options.signal.aborted) {
+          for (const skipped of calls.slice(index)) {
+            messages.push({ role: "tool", toolCallId: skipped.id, output: "not executed: run aborted", isError: true });
+          }
+          options.log?.append({ t: "step/end", step, stopReason: "aborted" });
+          return finish("aborted", step);
+        }
         options.log?.append({ t: "tool/call", step, callId: call.id, name: call.name, input: call.input });
         const outcome = await runTool(
           call,
@@ -181,7 +193,7 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
         );
         messages.push({ role: "tool", toolCallId: call.id, output: outcome.output, isError: outcome.isError });
       }
-      for (const skipped of result.toolCalls.slice(options.maxToolCallsPerStep)) {
+      for (const skipped of calls.slice(options.maxToolCallsPerStep)) {
         const output = `not executed: more than ${options.maxToolCallsPerStep} tool calls in one step`;
         messages.push({ role: "tool", toolCallId: skipped.id, output, isError: true });
       }
@@ -192,6 +204,10 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
 
     return finish("max_steps", options.maxSteps);
   } catch (error) {
+    if (!settled && options.signal.aborted) {
+      options.log?.append({ t: "step/end", step: currentStep, stopReason: "aborted" });
+      return finish("aborted", currentStep);
+    }
     if (!settled) {
       options.log?.append({ t: "turn/end", turn, stopReason: "failed", usage });
     }

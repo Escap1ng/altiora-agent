@@ -9,7 +9,7 @@ import type { RunEvent } from "./loop.ts";
 export interface CompactionGateInput {
   messages: Message[];
   requestMessages: Message[];
-  compacted: boolean;
+  compactedAt: number | undefined;
   compaction: CompactionConfig | undefined;
   contextWindow: number;
   reserveOutputTokens: number;
@@ -26,22 +26,23 @@ export interface CompactionGateInput {
 export interface CompactionGateResult {
   messages: Message[];
   requestMessages: Message[];
-  compacted: boolean;
+  compactedAt: number | undefined;
 }
 
 export async function runCompactionGate(input: CompactionGateInput): Promise<CompactionGateResult> {
   const unchanged: CompactionGateResult = {
     messages: input.messages,
     requestMessages: input.requestMessages,
-    compacted: input.compacted,
+    compactedAt: input.compactedAt,
   };
-  if (input.compaction === undefined || input.compacted) return unchanged;
+  if (input.compaction === undefined) return unchanged;
+  if (input.compactedAt !== undefined && input.messages.length <= input.compactedAt) return unchanged;
 
   const estimated = input.estimator.estimateMessages(input.requestMessages);
   if (
     !shouldCompact(estimated, input.compaction, input.contextWindow, input.reserveOutputTokens)
   ) {
-    return { ...unchanged, compacted: false };
+    return unchanged;
   }
 
   const outcome = await compactMessages(input.messages, {
@@ -52,7 +53,10 @@ export async function runCompactionGate(input: CompactionGateInput): Promise<Com
     signal: input.signal,
     policy: input.retry,
   });
-  if (outcome === null) return unchanged;
+  if (outcome === null || outcome.tokensAfter >= outcome.tokensBefore) {
+    // disable compaction for the rest of the turn so a failing summary is not retried every step
+    return { ...unchanged, compactedAt: Number.MAX_SAFE_INTEGER };
+  }
 
   input.log?.append({
     t: "compaction",
@@ -71,5 +75,5 @@ export async function runCompactionGate(input: CompactionGateInput): Promise<Com
     input.systemPrompt === undefined
       ? outcome.messages
       : [{ role: "system" as const, content: input.systemPrompt }, ...outcome.messages];
-  return { messages: outcome.messages, requestMessages, compacted: true };
+  return { messages: outcome.messages, requestMessages, compactedAt: outcome.messages.length };
 }
