@@ -48,6 +48,16 @@ export interface RetryConfig {
   baseDelayMs: number;
 }
 
+export type HookEvent = "pre_tool_use" | "post_tool_use";
+
+export interface HookConfig {
+  event: HookEvent;
+  command: string[];
+  matcher?: string;
+  timeoutMs?: number;
+  enabled?: boolean;
+}
+
 export interface Config {
   provider: string;
   baseUrl: string;
@@ -65,6 +75,7 @@ export interface Config {
   permissions: PermissionsConfig;
   compaction: CompactionConfig;
   retry: RetryConfig;
+  hooks: HookConfig[];
   trustedProjects: string[];
 }
 
@@ -101,6 +112,7 @@ export const DEFAULT_CONFIG: Config = {
     maxAttempts: 3,
     baseDelayMs: 1000,
   },
+  hooks: [],
   trustedProjects: [],
 };
 
@@ -130,6 +142,7 @@ export function resolveConfig(partial: Partial<Config> = {}): Config {
       ...DEFAULT_CONFIG.retry,
       ...partial.retry,
     },
+    hooks: partial.hooks ?? DEFAULT_CONFIG.hooks,
     trustedProjects: partial.trustedProjects ?? DEFAULT_CONFIG.trustedProjects,
   };
 }
@@ -137,6 +150,7 @@ export function resolveConfig(partial: Partial<Config> = {}): Config {
 const PERMISSION_MODES: ReadonlySet<string> = new Set(["default", "plan", "unattended"]);
 const PERMISSION_EFFECTS: ReadonlySet<string> = new Set(["allow", "ask", "deny"]);
 const SHELLS: ReadonlySet<string> = new Set(["auto", "pwsh", "powershell", "bash", "sh"]);
+const HOOK_EVENTS: ReadonlySet<string> = new Set(["pre_tool_use", "post_tool_use"]);
 const SERVER_NAME = /^[a-zA-Z0-9_-]+$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -236,8 +250,7 @@ export function validateConfig(input: unknown): string[] {
   }
 
   const mcpServers = input["mcpServers"];
-  if (mcpServers !== undefined) {
-    if (!isRecord(mcpServers)) {
+  if (mcpServers !== undefined) {    if (!isRecord(mcpServers)) {
       problems.push("mcpServers must be an object");
     } else {
       for (const [name, server] of Object.entries(mcpServers)) {
@@ -274,6 +287,45 @@ export function validateConfig(input: unknown): string[] {
           problems.push(`mcpServers.${name}.enabled must be a boolean`);
         }
       }
+    }
+  }
+
+  const hooks = input["hooks"];
+  if (hooks !== undefined) {
+    if (!Array.isArray(hooks)) {
+      problems.push("hooks must be an array");
+    } else {
+      hooks.forEach((hook, index) => {
+        if (!isRecord(hook)) {
+          problems.push(`hooks[${index}] must be an object`);
+          return;
+        }
+        const event = hook["event"];
+        if (typeof event !== "string" || !HOOK_EVENTS.has(event)) {
+          problems.push(`hooks[${index}].event must be one of ${[...HOOK_EVENTS].join(", ")}`);
+        }
+        const command = hook["command"];
+        if (
+          !Array.isArray(command) ||
+          command.length === 0 ||
+          command[0] === "" ||
+          command.some((part) => typeof part !== "string")
+        ) {
+          problems.push(`hooks[${index}].command must be a non-empty array of strings`);
+        }
+        const matcher = hook["matcher"];
+        if (matcher !== undefined && (typeof matcher !== "string" || matcher === "")) {
+          problems.push(`hooks[${index}].matcher must be a non-empty string`);
+        }
+        const timeoutMs = hook["timeoutMs"];
+        if (timeoutMs !== undefined && !isPositiveInteger(timeoutMs)) {
+          problems.push(`hooks[${index}].timeoutMs must be a positive integer`);
+        }
+        const enabled = hook["enabled"];
+        if (enabled !== undefined && typeof enabled !== "boolean") {
+          problems.push(`hooks[${index}].enabled must be a boolean`);
+        }
+      });
     }
   }
 

@@ -47,6 +47,16 @@ export type Rec =
       truncated: boolean;
       durationMs: number;
     })
+  | (Base & {
+      t: "hook";
+      callId: string;
+      tool: string;
+      event: "pre_tool_use" | "post_tool_use";
+      status: "ok" | "error" | "timeout" | "aborted";
+      exitCode: number | null;
+      durationMs: number;
+      output: string;
+    })
   | (Base & { t: "step/end"; step: number; stopReason: string })
   | (Base & {
       t: "compaction";
@@ -72,6 +82,7 @@ const KNOWN_TYPES: ReadonlySet<string> = new Set([
   "tool/call",
   "permission",
   "tool/result",
+  "hook",
   "step/end",
   "compaction",
   "turn/end",

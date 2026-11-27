@@ -1,4 +1,6 @@
 import type { PermissionEngine } from "../permissions/engine.ts";
+import type { HookConfig, HookEvent } from "../config/schema.ts";
+import { runHooks } from "../hooks/runner.ts";
 import type { SessionLog } from "../session/log.ts";
 import type { ToolContext, ToolRegistry } from "../tools/registry.ts";
 import { HarnessError } from "./errors.ts";
@@ -15,6 +17,7 @@ export interface ToolOutcome {
 export interface ToolRunnerOptions {
   registry: ToolRegistry;
   permissions: PermissionEngine;
+  hooks?: HookConfig[];
   confirm?: (request: { tool: string; resources: string[]; reason: string }) => Promise<boolean>;
   log?: SessionLog;
   onEvent?: (event: RunEvent) => void;
@@ -111,7 +114,33 @@ export async function runTool(
 
   if (context.signal.aborted) return fail("not executed: run aborted");
 
+  const runPhase = async (event: HookEvent): Promise<void> => {
+    if (options.hooks === undefined || options.hooks.length === 0) return;
+    const outcomes = await runHooks(
+      options.hooks,
+      event,
+      { tool: call.name, callId: call.id, cwd: context.cwd },
+      context.signal,
+    );
+    for (const outcome of outcomes) {
+      options.log?.append({
+        t: "hook",
+        callId: call.id,
+        tool: call.name,
+        event: outcome.event,
+        status: outcome.status,
+        exitCode: outcome.exitCode,
+        durationMs: outcome.durationMs,
+        output: outcome.output,
+      });
+    }
+  };
+
+  await runPhase("pre_tool_use");
+  if (context.signal.aborted) return fail("not executed: run aborted");
+
   const started = Date.now();
+  let outcome: ToolOutcome;
   try {
     const result = await definition.execute(input, context);
     options.log?.append({
@@ -132,7 +161,7 @@ export async function runTool(
       denied: false,
       durationMs: Date.now() - started,
     });
-    return { output: result.output, isError: result.isError, denied: false, truncated: result.truncated };
+    outcome = { output: result.output, isError: result.isError, denied: false, truncated: result.truncated };
   } catch (error) {
     const output = error instanceof HarnessError ? error.message : String(error);
     options.log?.append({
@@ -144,6 +173,9 @@ export async function runTool(
       truncated: false,
       durationMs: Date.now() - started,
     });
-    return fail(output);
+    outcome = fail(output);
   }
+
+  await runPhase("post_tool_use");
+  return outcome;
 }

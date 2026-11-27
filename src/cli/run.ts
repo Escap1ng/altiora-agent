@@ -131,6 +131,7 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       maxOutputChars: config.maxOutputChars,
       bash: config.tools.bash,
       retry: config.retry,
+      hooks: config.hooks,
       systemPrompt,
     });
     return { text: result.text, isError: result.stopReason !== "completed" };
@@ -182,6 +183,7 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       systemPrompt,
       estimator,
       compaction: config.compaction,
+      hooks: config.hooks,
       contextWindow: contextWindow,
       reserveOutputTokens: config.reserveOutputTokens,
       runSubagent,

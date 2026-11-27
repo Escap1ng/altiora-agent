@@ -43,6 +43,7 @@ export function deriveMessages(records: Rec[]): DerivedHistory {
       case "session/start":
       case "step/start":
       case "permission":
+      case "hook":
       case "step/end":
       case "turn/end":
       case "notice":

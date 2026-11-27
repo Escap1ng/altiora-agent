@@ -53,6 +53,7 @@ function mergeConfig(base: Config, next: Partial<Config>): Config {
           },
     compaction: next.compaction === undefined ? base.compaction : { ...base.compaction, ...next.compaction },
     retry: next.retry === undefined ? base.retry : { ...base.retry, ...next.retry },
+    hooks: next.hooks ?? base.hooks,
     trustedProjects: next.trustedProjects ?? base.trustedProjects,
   };
 }

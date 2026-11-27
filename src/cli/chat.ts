@@ -226,6 +226,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
         systemPrompt,
         estimator,
         compaction: config.compaction,
+        hooks: config.hooks,
         contextWindow: activeWindow,
         reserveOutputTokens: config.reserveOutputTokens,
         confirm,
@@ -243,6 +244,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
             maxOutputChars: config.maxOutputChars,
             bash: config.tools.bash,
             retry: config.retry,
+            hooks: config.hooks,
             systemPrompt,
           });
           return { text: nested.text, isError: nested.stopReason !== "completed" };

@@ -74,6 +74,7 @@ export async function runScheduleEntry(entry: ScheduleEntry, options: SchedulerO
       systemPrompt,
       estimator,
       compaction: config.compaction,
+      hooks: config.hooks,
       contextWindow,
       reserveOutputTokens: config.reserveOutputTokens,
       runSubagent: async (prompt) => {
@@ -90,6 +91,7 @@ export async function runScheduleEntry(entry: ScheduleEntry, options: SchedulerO
           maxOutputChars: config.maxOutputChars,
           bash: config.tools.bash,
           retry: config.retry,
+          hooks: config.hooks,
           systemPrompt,
         });
         return { text: nested.text, isError: nested.stopReason !== "completed" };

@@ -218,6 +218,7 @@ export class AgentService {
         systemPrompt,
         estimator,
         compaction: config.compaction,
+        hooks: config.hooks,
         contextWindow,
         reserveOutputTokens: config.reserveOutputTokens,
         confirm: (request) => this.askConfirm(request),
@@ -235,6 +236,7 @@ export class AgentService {
             maxOutputChars: config.maxOutputChars,
             bash: config.tools.bash,
             retry: config.retry,
+            hooks: config.hooks,
             systemPrompt,
           });
           return { text: nested.text, isError: nested.stopReason !== "completed" };

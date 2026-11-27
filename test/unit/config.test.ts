@@ -112,3 +112,36 @@ test("mcpServers merge per name across config layers", () => {
     cliServer: { command: "python" },
   });
 });
+
+test("hooks default to an empty list", () => {
+  assert.deepEqual(DEFAULT_CONFIG.hooks, []);
+  assert.deepEqual(loadConfig({ cwd: tmpdir(), env: isolatedEnv() }).config.hooks, []);
+});
+
+test("validateConfig accepts hook entries", () => {
+  const problems = validateConfig({
+    hooks: [
+      { event: "pre_tool_use", command: ["node", "hook.mjs"], matcher: "write", timeoutMs: 5000, enabled: true },
+      { event: "post_tool_use", command: ["node", "hook.mjs"] },
+    ],
+  });
+  assert.deepEqual(problems, []);
+});
+
+test("validateConfig rejects invalid hook entries", () => {
+  const cases: unknown[] = [
+    "nope",
+    [{}],
+    [{ event: "on_start", command: ["node"] }],
+    [{ event: "pre_tool_use", command: "node" }],
+    [{ event: "pre_tool_use", command: [] }],
+    [{ event: "pre_tool_use", command: [""] }],
+    [{ event: "pre_tool_use", command: ["node", 1] }],
+    [{ event: "pre_tool_use", command: ["node"], matcher: "" }],
+    [{ event: "pre_tool_use", command: ["node"], timeoutMs: 0 }],
+    [{ event: "pre_tool_use", command: ["node"], enabled: "yes" }],
+  ];
+  for (const invalid of cases) {
+    assert.notDeepEqual(validateConfig({ hooks: invalid }), [], JSON.stringify(invalid));
+  }
+});

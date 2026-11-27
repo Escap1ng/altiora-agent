@@ -1,4 +1,4 @@
-import type { CompactionConfig } from "../config/schema.ts";
+import type { CompactionConfig, HookConfig } from "../config/schema.ts";
 import { runCompactionGate } from "./compaction-gate.ts";
 import { TokenEstimator } from "./tokens.ts";
 import type { PermissionEngine } from "../permissions/engine.ts";
@@ -48,6 +48,7 @@ export interface LoopOptions {
   systemPrompt?: string;
   estimator?: TokenEstimator;
   compaction?: CompactionConfig;
+  hooks?: HookConfig[];
   contextWindow?: number;
   reserveOutputTokens?: number;
   runSubagent?: (prompt: string) => Promise<{ text: string; isError: boolean }>;
@@ -186,6 +187,7 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
           {
             registry: options.registry,
             permissions: options.permissions,
+            ...(options.hooks === undefined ? {} : { hooks: options.hooks }),
             ...(options.confirm === undefined ? {} : { confirm: options.confirm }),
             ...(options.log === undefined ? {} : { log: options.log }),
             ...(options.onEvent === undefined ? {} : { onEvent: options.onEvent }),
