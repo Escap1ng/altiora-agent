@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { chatCommand } from "./chat.ts";
 import { configCommand } from "./config-command.ts";
+import { doctorCommand } from "./doctor.ts";
 import { initCommand } from "./init.ts";
 import { runCommand } from "./run.ts";
 import { scheduleCommand } from "./schedule.ts";
@@ -13,6 +14,7 @@ const EXIT_USAGE = 2;
 interface PackageJson {
   name: string;
   version: string;
+  engines?: { node?: string };
 }
 
 const pkg = JSON.parse(
@@ -29,6 +31,7 @@ Commands:
   sessions list|show    Inspect saved sessions
   schedule ...          Manage scheduled tasks (list/add/remove/enable/disable/run-now/watch)
   config path|get|set   Inspect or change configuration
+  doctor                Check node, config, api key, provider, storage
   init                  Write project config and AGENTS.md
 
 Options:
@@ -82,6 +85,15 @@ export async function main(argv: string[]): Promise<number> {
         cwd: process.cwd(),
         stdout: process.stdout,
         stderr: process.stderr,
+      });
+    case "doctor":
+      return doctorCommand(rest, {
+        cwd: process.cwd(),
+        env: process.env,
+        stdout: process.stdout,
+        stderr: process.stderr,
+        nodeVersion: process.version,
+        minNode: pkg.engines?.node ?? "22.18",
       });
     case "sessions":
       return sessionsCommand(rest, {

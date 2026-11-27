@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -141,4 +141,27 @@ test("run without a model reports a configuration problem", () => {
   const result = run(["run", "hello"]);
   assert.equal(result.status, 1);
   assert.match(result.stderr, /missing model/);
+});
+
+test("doctor rejects an unknown output format", () => {
+  const result = run(["doctor", "--output-format", "yaml"]);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /unknown output format: yaml/);
+});
+
+test("doctor reports a missing api key as json", () => {
+  const dir = tempConfigDir();
+  writeFileSync(
+    join(dir, "config.json"),
+    JSON.stringify({ model: "m", apiKeyEnv: "ALTIORA_DOCTOR_MISSING", baseUrl: "http://127.0.0.1:9/v1" }),
+  );
+  const result = run(["doctor", "--output-format", "json"], {
+    ALTIORA_CONFIG_DIR: dir,
+    ALTIORA_DATA_DIR: join(dir, "data"),
+  });
+  assert.equal(result.status, 1);
+  const report = JSON.parse(result.stdout) as { ok: boolean; checks: { name: string; status: string }[] };
+  assert.equal(report.ok, false);
+  const apiKey = report.checks.find((check) => check.name === "api-key");
+  assert.equal(apiKey?.status, "error");
 });
