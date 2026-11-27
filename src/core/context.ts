@@ -3,6 +3,7 @@ export interface SystemPromptOptions {
   platform: NodeJS.Platform;
   shell: string;
   memory: string;
+  skills?: readonly { name: string; description: string }[];
 }
 
 export function buildSystemPrompt(options: SystemPromptOptions): string {
@@ -16,6 +17,10 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
     "Keep changes scoped to the request, verify your work when a test command exists, and report what you changed.",
   ];
   if (options.shell !== "") parts.push(`Configured shell: ${options.shell}.`);
+  if (options.skills !== undefined && options.skills.length > 0) {
+    const catalog = options.skills.map((skill) => `- ${skill.name}: ${skill.description}`).join("\n");
+    parts.push(`# Skills\n\nLoad a skill with the skill tool before following it.\n\n${catalog}`);
+  }
   if (options.memory.trim() !== "") {
     parts.push(`# Project instructions\n\n${options.memory.trim()}`);
   }

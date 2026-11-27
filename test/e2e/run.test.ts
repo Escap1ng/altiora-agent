@@ -103,8 +103,34 @@ test("prints streamed text from an openai-compatible endpoint", async () => {
   }
 });
 
-test("runs tools across steps and feeds results back", async () => {
+test("injects the skill catalog into the system prompt", async () => {
   const cwd = await workspace();
+  await mkdir(join(cwd, ".altiora", "skills"), { recursive: true });
+  await writeFile(
+    join(cwd, ".altiora", "skills", "review.md"),
+    "---\ndescription: Review a diff\n---\nRead the diff, then report.\n",
+  );
+  const server = await startMockServer(() => ({
+    chunks: sseChunks([{ choices: [{ delta: { content: "ok" }, finish_reason: "stop" }] }]),
+  }));
+
+  try {
+    const result = await runCli(["run", "hello", "--base-url", server.url, "--model", "test-model"], {
+      cwd,
+      env: envFor(cwd),
+    });
+
+    assert.equal(result.code, 0);
+    const messages = server.requests[0]?.body?.["messages"] as Record<string, unknown>[];
+    assert.equal(messages[0]?.["role"], "system");
+    assert.match(String(messages[0]?.["content"]), /# Skills/);
+    assert.match(String(messages[0]?.["content"]), /- review: Review a diff/);
+  } finally {
+    await server.close();
+  }
+});
+
+test("runs tools across steps and feeds results back", async () => {  const cwd = await workspace();
   const server = await startMockServer((_request, index) => {
     if (index === 0) {
       return { chunks: sseChunks([toolCall("call_1", "write", { path: "note.txt", content: "hi" })]) };

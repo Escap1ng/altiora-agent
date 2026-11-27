@@ -52,10 +52,10 @@ export function discoverMemoryFiles(cwd: string, repoRoot: string): string[] {
   return files.reverse();
 }
 
-function expand(
+export function expandImports(
   text: string,
   file: string,
-  repoRoot: string,
+  root: string,
   depth: number,
   platform: NodeJS.Platform,
 ): string {
@@ -66,12 +66,12 @@ function expand(
       const match = /^@(.+)$/.exec(line.trim());
       if (match === null) return line;
       const target = resolve(dirname(file), match[1]!);
-      if (!isInside(repoRoot, target, platform)) {
+      if (!isInside(root, target, platform)) {
         return `[skipped import outside the repository: ${match[1]}]`;
       }
       const imported = readText(target);
       if (imported === undefined) return `[missing import: ${match[1]}]`;
-      return expand(imported, target, repoRoot, depth + 1, platform);
+      return expandImports(imported, target, root, depth + 1, platform);
     })
     .join("\n");
 }
@@ -88,7 +88,7 @@ export function loadMemory(options: MemoryOptions): MemoryResult {
   if (globalFile !== undefined) {
     const text = readText(globalFile);
     if (text !== undefined && text.trim() !== "") {
-      sections.push(`## global\n\n${expand(text, globalFile, repoRoot, 0, platform)}`);
+      sections.push(`## global\n\n${expandImports(text, globalFile, repoRoot, 0, platform)}`);
       used.push(globalFile);
     }
   }
@@ -96,7 +96,7 @@ export function loadMemory(options: MemoryOptions): MemoryResult {
   for (const file of files) {
     const text = readText(file);
     if (text === undefined || text.trim() === "") continue;
-    sections.push(`## ${relative(repoRoot, file).replace(/\\/g, "/")}\n\n${expand(text, file, repoRoot, 0, platform)}`);
+    sections.push(`## ${relative(repoRoot, file).replace(/\\/g, "/")}\n\n${expandImports(text, file, repoRoot, 0, platform)}`);
     used.push(file);
   }
 

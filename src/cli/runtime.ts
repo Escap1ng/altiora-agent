@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import { loadConfig } from "../config/load.ts";
 import { loadMemory } from "../config/memory.ts";
 import { resolveAppPaths } from "../config/paths.ts";
@@ -18,6 +19,8 @@ import { createRegistry, type ToolRegistry } from "../tools/registry.ts";
 import { defaultTools } from "../tools/index.ts";
 import { createMcpManager, type McpManager } from "../mcp/manager.ts";
 import type { HarnessSpec } from "../session/spec.ts";
+import { discoverSkills, skillCatalog, type Skill } from "../skills/skills.ts";
+import { skillTool } from "../tools/skill.ts";
 
 export interface RuntimeIo {
   cwd: string;
@@ -38,6 +41,7 @@ export interface Runtime {
   contextWindow: number;
   contextWindowSource: "config" | "models" | "fallback";
   modelLimits: ModelLimits | undefined;
+  skills: Skill[];
   mcp: McpManager | undefined;
 }
 
@@ -136,6 +140,13 @@ export async function buildRuntime(io: RuntimeIo, values: Record<string, unknown
   }
 
   const allTools = defaultTools();
+  const appPaths = resolveAppPaths(io.env);
+  const skills = discoverSkills({
+    cwd: io.cwd,
+    globalDir: join(appPaths.configDir, "skills"),
+    platform: process.platform,
+  });
+  if (skills.length > 0) allTools.push(skillTool(skills));
   let mcp: McpManager | undefined;
   if (Object.keys(config.mcpServers).length > 0) {
     mcp = createMcpManager({
@@ -155,7 +166,7 @@ export async function buildRuntime(io: RuntimeIo, values: Record<string, unknown
   const provider = new OpenAiCompatProvider({ baseUrl: config.baseUrl, apiKey });
   const memory = loadMemory({
     cwd: io.cwd,
-    globalFile: resolveAppPaths(io.env).memoryFile,
+    globalFile: appPaths.memoryFile,
     platform: process.platform,
   });
   const systemPrompt = buildSystemPrompt({
@@ -163,6 +174,7 @@ export async function buildRuntime(io: RuntimeIo, values: Record<string, unknown
     platform: process.platform,
     shell: config.tools.bash.shell,
     memory: memory.text,
+    skills: skillCatalog(skills),
   });
   const estimator = new TokenEstimator();
 
@@ -180,6 +192,7 @@ export async function buildRuntime(io: RuntimeIo, values: Record<string, unknown
       contextWindow,
       contextWindowSource,
       modelLimits,
+      skills,
       mcp,
     },
   };
