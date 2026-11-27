@@ -4,6 +4,7 @@ import { TokenEstimator } from "./tokens.ts";
 import type { PermissionEngine } from "../permissions/engine.ts";
 import type { RetryPolicy } from "../providers/retry.ts";
 import type { SessionLog } from "../session/log.ts";
+import { inputFingerprint } from "../session/spec.ts";
 import { collectStep } from "./step.ts";
 import { runTool } from "./tool-runner.ts";
 import type { ToolContext, ToolRegistry } from "../tools/registry.ts";
@@ -87,7 +88,7 @@ export async function runAgent(input: string, options: LoopOptions): Promise<Run
   let settled = false;
   let currentStep = 0;
 
-  options.log?.append({ t: "turn/start", turn, input });
+  options.log?.append({ t: "turn/start", turn, input, fingerprint: inputFingerprint(input) });
 
   const finish = (stopReason: StopReason, step: number): RunResult => {
     settled = true;

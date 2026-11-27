@@ -4,6 +4,7 @@ import { buildRuntime, prepareSession } from "../cli/runtime.ts";
 import { sessionDirFor, resolveAppPaths } from "../config/paths.ts";
 import { runAgent } from "../core/loop.ts";
 import { toHarnessError } from "../core/errors.ts";
+import { fingerprintConfig } from "../session/spec.ts";
 import { nextRun } from "./cron.ts";
 import { loadSchedules, saveSchedules, type ScheduleEntry } from "./store.ts";
 
@@ -46,6 +47,7 @@ export async function runScheduleEntry(entry: ScheduleEntry, options: SchedulerO
       version: options.version,
       resumeId: undefined,
       forkId: undefined,
+      spec: { toolNames: registry.names(), configFingerprint: fingerprintConfig(config) },
     });
   } catch (error) {
     built.runtime.mcp?.close();

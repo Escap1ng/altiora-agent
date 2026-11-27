@@ -3,6 +3,7 @@ import { parseArgs } from "node:util";
 import { sessionDirFor } from "../config/paths.ts";
 import { toHarnessError } from "../core/errors.ts";
 import { runAgent, type RunEvent } from "../core/loop.ts";
+import { fingerprintConfig } from "../session/spec.ts";
 import { createStreamJsonRenderer, type ResultSummary } from "./render/stream-json.ts";
 import { buildRuntime, prepareSession, type SessionSetup } from "./runtime.ts";
 
@@ -106,6 +107,7 @@ export async function runCommand(argv: string[], io: RunIo): Promise<number> {
       version: io.version,
       resumeId: typeof values.resume === "string" ? values.resume : undefined,
       forkId: typeof values.fork === "string" ? values.fork : undefined,
+      spec: { toolNames: registry.names(), configFingerprint: fingerprintConfig(config) },
     });
   } catch (error) {
     io.stderr.write(`${(error as Error).message}\n`);

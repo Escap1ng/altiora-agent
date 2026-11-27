@@ -9,6 +9,7 @@ import { runAgent, type RunEvent } from "../core/loop.ts";
 import type { Message } from "../core/types.ts";
 import { fetchModelLimits } from "../providers/models.ts";
 import { computeStats } from "../session/stats.ts";
+import { fingerprintConfig } from "../session/spec.ts";
 import { buildRuntime, prepareSession, type SessionSetup } from "./runtime.ts";
 
 export interface ChatIo {
@@ -72,6 +73,7 @@ export async function chatCommand(argv: string[], io: ChatIo): Promise<number> {
       version: io.version,
       resumeId,
       forkId: undefined,
+      spec: { toolNames: registry.names(), configFingerprint: fingerprintConfig(config) },
     });
 
   let session: SessionSetup;

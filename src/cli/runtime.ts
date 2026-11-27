@@ -13,10 +13,11 @@ import { fetchModelLimits, type ModelLimits } from "../providers/models.ts";
 import { OpenAiCompatProvider } from "../providers/openai-compat.ts";
 import { deriveMessages } from "../session/derive.ts";
 import { openSession, sessionPath, type SessionLog } from "../session/log.ts";
-import { parseRecords } from "../session/records.ts";
+import { parseRecords, type Rec } from "../session/records.ts";
 import { createRegistry, type ToolRegistry } from "../tools/registry.ts";
 import { defaultTools } from "../tools/index.ts";
 import { createMcpManager, type McpManager } from "../mcp/manager.ts";
+import type { HarnessSpec } from "../session/spec.ts";
 
 export interface RuntimeIo {
   cwd: string;
@@ -202,21 +203,26 @@ export interface SessionOptions {
   version: string;
   resumeId: string | undefined;
   forkId: string | undefined;
+  spec?: HarnessSpec;
 }
 
 export function prepareSession(options: SessionOptions): SessionSetup {
+  type StartRecord = Extract<Rec, { t: "session/start" }>;
+  const header = (id: string): Omit<StartRecord, "v" | "ts"> => ({
+    t: "session/start",
+    id,
+    cwd: options.cwd,
+    model: options.model,
+    provider: "openai-compat",
+    harnessVersion: options.version,
+    ...(options.spec === undefined
+      ? {}
+      : { toolNames: options.spec.toolNames, configFingerprint: options.spec.configFingerprint }),
+  });
+
   const startRecord = (id: string): SessionSetup => {
     const log = openSession(options.directory, id);
-    if (log.records().length === 0) {
-      log.append({
-        t: "session/start",
-        id,
-        cwd: options.cwd,
-        model: options.model,
-        provider: "openai-compat",
-        harnessVersion: options.version,
-      });
-    }
+    if (log.records().length === 0) log.append(header(id));
     return { id, log, history: undefined, turn: 1 };
   };
 
@@ -239,16 +245,7 @@ export function prepareSession(options: SessionOptions): SessionSetup {
   }
 
   const id = newSessionId();
-  const header = JSON.stringify({
-    v: 1,
-    ts: Date.now(),
-    t: "session/start",
-    id,
-    cwd: options.cwd,
-    model: options.model,
-    provider: "openai-compat",
-    harnessVersion: options.version,
-  });
-  writeFileSync(sessionPath(options.directory, id), `${header}\n${raw}`, "utf8");
+  const head = JSON.stringify({ v: 1, ts: Date.now(), ...header(id) });
+  writeFileSync(sessionPath(options.directory, id), `${head}\n${raw}`, "utf8");
   return { id, log: openSession(options.directory, id), history, turn };
 }

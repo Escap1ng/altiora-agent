@@ -16,8 +16,10 @@ export type Rec =
       model: string;
       provider: string;
       harnessVersion: string;
+      toolNames?: string[];
+      configFingerprint?: string;
     })
-  | (Base & { t: "turn/start"; turn: number; input: string })
+  | (Base & { t: "turn/start"; turn: number; input: string; fingerprint?: string })
   | (Base & { t: "step/start"; step: number })
   | (Base & {
       t: "assistant/attempt";

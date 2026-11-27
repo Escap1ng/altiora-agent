@@ -6,6 +6,7 @@ import { toHarnessError } from "../core-dist/core/errors.js";
 import { runAgent, type RunEvent, type StopReason } from "../core-dist/core/loop.js";
 import type { Message, Usage } from "../core-dist/core/types.js";
 import { deriveMessages } from "../core-dist/session/derive.js";
+import { fingerprintConfig } from "../core-dist/session/spec.js";
 import { listSessions, type SessionSummary } from "../core-dist/session/store.js";
 
 export interface ReadyState {
@@ -79,6 +80,10 @@ export class AgentService {
       version: options.version,
       resumeId: undefined,
       forkId: undefined,
+      spec: {
+        toolNames: built.runtime.registry.names(),
+        configFingerprint: fingerprintConfig(built.runtime.config),
+      },
     });
     return new AgentService(options, built.runtime, session);
   }
@@ -139,6 +144,10 @@ export class AgentService {
         version: this.options.version,
         resumeId: id,
         forkId: undefined,
+        spec: {
+          toolNames: this.runtime.registry.names(),
+          configFingerprint: fingerprintConfig(this.runtime.config),
+        },
       });
       this.session = setup;
       this.history = setup.history ?? [];
@@ -162,6 +171,10 @@ export class AgentService {
       version: this.options.version,
       resumeId: undefined,
       forkId: undefined,
+      spec: {
+        toolNames: this.runtime.registry.names(),
+        configFingerprint: fingerprintConfig(this.runtime.config),
+      },
     });
     this.session = setup;
     this.history = [];
